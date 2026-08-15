@@ -9,6 +9,7 @@ import { orderService } from "@/services/orderService";
 import { OrderStatus, OrderWithItems, PaymentMethod } from "@/types";
 import { formatVND } from "@/utils/currency";
 import { formatDateTime } from "@/utils/date";
+import { generateOrderImage } from "@/utils/orderImage";
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   confirmed: "preparing",
@@ -72,6 +73,7 @@ export default function OrderDetailPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [changePaymentOpen, setChangePaymentOpen] = useState(false);
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   const load = useCallback(async () => {
     const data = await orderService.getById(id);
@@ -179,6 +181,64 @@ export default function OrderDetailPage() {
     setMenuOpen(false);
   };
 
+  const handleCapture = async () => {
+    if (!order) return;
+    setMenuOpen(false);
+    setCapturing(true);
+
+    try {
+      const blob = await generateOrderImage(order);
+      const fileName = `don-hang-${order.customerName || "order"}.png`;
+      const file = new File([blob], fileName, { type: "image/png" });
+
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
+        // Mobile/iPad: share sheet -> user can "Save to Photos"
+        await navigator.share({ files: [file] });
+      } else if ("showSaveFilePicker" in window) {
+        // Desktop with File System Access API: let user pick folder
+        try {
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: fileName,
+            startIn: "downloads",
+            types: [{ description: "PNG Image", accept: { "image/png": [".png"] } }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          alert("Da luu anh don hang!");
+        } catch (err: any) {
+          if (err?.name === "AbortError") return;
+          throw err;
+        }
+      } else {
+        // Fallback: download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
+      console.error("Capture error:", e);
+      alert("Khong the tao anh don hang");
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const handleEdit = async () => {
+    const currentEditor = await orderService.checkEditingBy(id);
+    if (currentEditor) {
+      alert("Đơn hàng đang được chỉnh sửa trên thiết bị khác. Vui lòng thử lại sau.");
+      return;
+    }
+    router.push(`/orders/create?editId=${id}`);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -208,17 +268,17 @@ export default function OrderDetailPage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 pb-24 lg:pb-8 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <button onClick={() => router.back()} className="text-sm text-muted hover:text-gray-700">
+        <button onClick={() => router.push("/orders")} className="text-sm text-muted hover:text-gray-700">
           ← Quay lại
         </button>
         <div className="flex items-center gap-2">
           {canEdit && (
-            <Link
-              href={`/orders/create?editId=${id}`}
+            <button
+              onClick={handleEdit}
               className="text-sm font-semibold text-primary hover:underline"
             >
               Chỉnh sửa
-            </Link>
+            </button>
           )}
           <button
             onClick={() => setMenuOpen(true)}
@@ -363,17 +423,24 @@ export default function OrderDetailPage() {
 
       {/* Totals */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
+        <h3 className="text-sm font-bold text-gray-900 pb-1">Tổng tiền</h3>
         <div className="flex justify-between text-sm">
           <span className="text-muted">Tạm tính</span>
           <span>{formatVND(order.subtotal)}</span>
         </div>
         {order.discountAmount > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">
-              Giảm giá {order.discountType === "percent" ? `(${order.discountValue}%)` : ""}
-            </span>
-            <span className="text-red-500">-{formatVND(order.discountAmount)}</span>
-          </div>
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">
+                Giảm giá {order.discountType === "percent" ? `(${order.discountValue}%)` : ""}
+              </span>
+              <span className="text-red-500">-{formatVND(order.discountAmount)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Giá sau giảm</span>
+              <span className="text-green-600 font-semibold">{formatVND(Math.max(0, order.subtotal - order.discountAmount))}</span>
+            </div>
+          </>
         )}
         {order.shippingFee > 0 && (
           <div className="flex justify-between text-sm">
@@ -412,7 +479,7 @@ export default function OrderDetailPage() {
       </div>
 
       {/* Action buttons */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+      <div className="space-y-3">
         {isDraft && (
           <button
             onClick={() => {
@@ -423,7 +490,7 @@ export default function OrderDetailPage() {
               setPaymentConfirmOpen(true);
             }}
             disabled={actionLoading}
-            className="w-full py-3 rounded-xl text-sm font-bold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-sm"
           >
             Xác nhận đơn hàng
           </button>
@@ -433,7 +500,7 @@ export default function OrderDetailPage() {
           <button
             onClick={handleAdvanceStatus}
             disabled={actionLoading}
-            className="w-full py-3 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-sm"
           >
             {actionLoading ? "Đang xử lý..." : NEXT_STATUS_LABEL[order.status]}
           </button>
@@ -454,9 +521,27 @@ export default function OrderDetailPage() {
               }
             }}
             disabled={actionLoading}
-            className="w-full py-3 rounded-xl text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50 shadow-sm"
           >
             Xác nhận hoàn tất (chờ)
+          </button>
+        )}
+
+        {canEdit && (
+          <button
+            onClick={handleEdit}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-primary border-2 border-primary hover:bg-blue-50"
+          >
+            Chỉnh sửa đơn hàng
+          </button>
+        )}
+
+        {isDraft && (
+          <button
+            onClick={handleDelete}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-red-500 border-2 border-red-200 hover:bg-red-50"
+          >
+            Xóa đơn hàng
           </button>
         )}
 
@@ -464,28 +549,10 @@ export default function OrderDetailPage() {
           <button
             onClick={handleCancel}
             disabled={actionLoading}
-            className="w-full py-3 rounded-xl text-sm font-bold text-red-500 bg-red-50 hover:bg-red-100 disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-red-500 border-2 border-red-200 hover:bg-red-50 disabled:opacity-50"
           >
             Hủy đơn hàng
           </button>
-        )}
-
-        {isDraft && (
-          <button
-            onClick={handleDelete}
-            className="w-full py-3 rounded-xl text-sm font-bold text-red-500 bg-red-50 hover:bg-red-100"
-          >
-            Xóa đơn hàng
-          </button>
-        )}
-
-        {canEdit && (
-          <Link
-            href={`/orders/create?editId=${id}`}
-            className="block w-full py-3 rounded-xl text-sm font-bold text-center text-primary bg-blue-50 hover:bg-blue-100"
-          >
-            Chỉnh sửa đơn hàng
-          </Link>
         )}
       </div>
 
@@ -533,19 +600,24 @@ export default function OrderDetailPage() {
       <Modal open={menuOpen} onClose={() => setMenuOpen(false)} title="Thao tác">
         <div className="space-y-2 pt-1">
           <button
+            onClick={handleCapture}
+            className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
+          >
+            📸 Chụp ảnh đơn hàng
+          </button>
+          <button
             onClick={handleCopy}
             className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
           >
             📋 Sao chép thông tin đơn hàng
           </button>
           {canEdit && (
-            <Link
-              href={`/orders/create?editId=${id}`}
-              onClick={() => setMenuOpen(false)}
-              className="block w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
+            <button
+              onClick={() => { setMenuOpen(false); handleEdit(); }}
+              className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
             >
               ✏️ Chỉnh sửa đơn hàng
-            </Link>
+            </button>
           )}
           {order.exchangeFromOrderId && (
             <Link
@@ -567,6 +639,16 @@ export default function OrderDetailPage() {
           )}
         </div>
       </Modal>
+
+      {/* Capturing overlay */}
+      {capturing && (
+        <div className="fixed inset-0 bg-white/80 z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium text-gray-600">Đang chụp ảnh...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

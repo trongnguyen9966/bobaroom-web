@@ -135,6 +135,7 @@ export interface OrderSummary extends Order {
   platformFeeAmount: number;
   itemCount: number;
   itemNames: string;
+  costOfGoods: number;
 }
 
 export interface OrderWithItems extends OrderSummary {
@@ -189,8 +190,9 @@ export interface RevenueStats {
 }
 
 export interface DateFilter {
-  mode: 'week' | 'month' | 'year';
+  mode: 'day' | 'month' | 'year' | 'custom';
   date: Date;
+  endDate?: Date;
 }
 
 export interface ChartDataPoint {

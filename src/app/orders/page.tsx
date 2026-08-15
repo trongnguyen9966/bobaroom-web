@@ -21,14 +21,14 @@ import {
 
 function getRange(filter: DateFilter): [number, number] {
   const d = filter.date;
-  if (filter.mode === "week") return [getStartOfDay(d).getTime(), getEndOfDay(d).getTime()];
+  if (filter.mode === "day") return [getStartOfDay(d).getTime(), getEndOfDay(d).getTime()];
   if (filter.mode === "month") return [getStartOfMonth(d).getTime(), getEndOfMonth(d).getTime()];
   return [getStartOfYear(d).getTime(), getEndOfYear(d).getTime()];
 }
 
 function getFilterLabel(filter: DateFilter): string {
   const d = filter.date;
-  if (filter.mode === "week") {
+  if (filter.mode === "day") {
     if (d.toDateString() === new Date().toDateString()) return "Hôm nay";
     return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
   }
@@ -51,7 +51,7 @@ const PLATFORM_OPTIONS: { value: OrderType | "all"; label: string }[] = [
   { value: "shopee", label: "Shopee" },
 ];
 
-const DEFAULT_FILTER: DateFilter = { mode: "week", date: new Date() };
+const DEFAULT_FILTER: DateFilter = { mode: "day", date: new Date() };
 
 interface Section { title: string; data: OrderSummary[] }
 
@@ -100,7 +100,7 @@ export default function OrdersPage() {
   const isFiltered =
     statusFilter !== "all" ||
     platformFilter !== "all" ||
-    filter.mode !== "week" ||
+    filter.mode !== "day" ||
     filter.date.toDateString() !== new Date().toDateString();
 
   // Real-time Firestore listener
@@ -227,7 +227,7 @@ export default function OrdersPage() {
   const navigateDate = (direction: -1 | 1) => {
     setPendingFilter((prev) => {
       const d = new Date(prev.date);
-      if (prev.mode === "week") d.setDate(d.getDate() + direction);
+      if (prev.mode === "day") d.setDate(d.getDate() + direction);
       else if (prev.mode === "month") d.setMonth(d.getMonth() + direction);
       else d.setFullYear(d.getFullYear() + direction);
       return { ...prev, date: d };
@@ -349,17 +349,17 @@ export default function OrdersPage() {
 
       {/* Select mode bottom bar */}
       {selectMode && selectedIds.size > 0 && (
-        <div className="bg-gray-800 text-white px-4 py-3 flex items-center gap-3 lg:rounded-t-xl safe-area-bottom">
+        <div className="fixed bottom-14 lg:bottom-0 left-0 right-0 z-[60] bg-gray-800 text-white px-4 py-3 flex items-center gap-3 lg:rounded-t-xl safe-area-bottom">
           <span className="text-sm font-semibold flex-1">{selectedIds.size} đã chọn</span>
           <button
             onClick={handleBulkCopy}
-            className="px-3 py-1.5 rounded-lg bg-gray-700 text-xs font-semibold hover:bg-gray-600"
+            className="px-4 py-2.5 rounded-lg bg-gray-700 text-sm font-semibold hover:bg-gray-600 active:bg-gray-500"
           >
             Sao chép
           </button>
           <button
             onClick={() => setBulkStatusVisible(true)}
-            className="px-3 py-1.5 rounded-lg bg-primary text-xs font-semibold hover:bg-primary-hover"
+            className="px-4 py-2.5 rounded-lg bg-primary text-sm font-semibold hover:bg-primary-hover active:bg-primary-hover"
           >
             Đổi trạng thái
           </button>
@@ -389,7 +389,7 @@ export default function OrdersPage() {
           <div>
             <label className="text-xs font-semibold text-muted uppercase tracking-wide">Thời gian</label>
             <div className="flex gap-2 mt-2">
-              {(["week", "month", "year"] as const).map((mode) => (
+              {(["day", "month", "year"] as const).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setPendingFilter((f) => ({ ...f, mode }))}
@@ -397,7 +397,7 @@ export default function OrdersPage() {
                     pendingFilter.mode === mode ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
                   }`}
                 >
-                  {mode === "week" ? "Ngày" : mode === "month" ? "Tháng" : "Năm"}
+                  {mode === "day" ? "Ngày" : mode === "month" ? "Tháng" : "Năm"}
                 </button>
               ))}
             </div>

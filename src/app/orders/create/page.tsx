@@ -1,17 +1,16 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ProductPickerModal } from "@/components/orders/ProductPickerModal";
 import { orderService } from "@/services/orderService";
+import { settingsService } from "@/services/settingsService";
 import {
   DiscountType,
-  OrderType,
-  PaymentMethod,
-  PlatformFeeType,
   Product,
 } from "@/types";
 import { formatInputNumber, formatVND, parseNumber } from "@/utils/currency";
+import { generateId } from "@/utils/uuid";
 
 interface DraftItem {
   product: Product;
@@ -19,18 +18,11 @@ interface DraftItem {
   isGift: boolean;
 }
 
-const ORDER_TYPES: { value: OrderType; label: string }[] = [
-  { value: "normal", label: "Đơn Thường" },
-  { value: "tiktok", label: "TikTok" },
-  { value: "shopee", label: "Shopee" },
-];
-
 function CreateOrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get("editId");
 
-  const [orderCode, setOrderCode] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -38,25 +30,36 @@ function CreateOrderForm() {
   const [discountType, setDiscountType] = useState<DiscountType>("percent");
   const [discountValue, setDiscountValue] = useState("");
   const [shippingFee, setShippingFee] = useState("");
-  const [orderType, setOrderType] = useState<OrderType>("normal");
-  const [platformFeeType, setPlatformFeeType] = useState<PlatformFeeType>("percent");
-  const [platformFeeValue, setPlatformFeeValue] = useState("");
   const [deposit, setDeposit] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
+  const [giftItems, setGiftItems] = useState<DraftItem[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [giftPickerVisible, setGiftPickerVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!editId);
+  const [giftItemsEnabled, setGiftItemsEnabled] = useState(false);
+  const sessionIdRef = useRef(generateId());
 
-  // Load existing order for edit mode
+  // Load settings
+  useEffect(() => {
+    const unsub = settingsService.subscribe((s) => {
+      setGiftItemsEnabled(s.giftItemsEnabled);
+    });
+    return () => unsub();
+  }, []);
+
+  // Load existing order for edit mode + set edit lock
   useEffect(() => {
     if (!editId) return;
+    const sessionId = sessionIdRef.current;
+
     (async () => {
       const order = await orderService.getById(editId);
       if (!order) {
         router.push("/orders");
         return;
       }
-      setOrderCode(order.orderCode ?? "");
+      await orderService.setEditingBy(editId, sessionId);
       setCustomerName(order.customerName);
       setCustomerPhone(order.customerPhone);
       setCustomerAddress(order.customerAddress);
@@ -64,46 +67,58 @@ function CreateOrderForm() {
       setDiscountType(order.discountType);
       setDiscountValue(order.discountValue > 0 ? String(order.discountValue) : "");
       setShippingFee(order.shippingFee > 0 ? String(order.shippingFee) : "");
-      setOrderType(order.orderType);
-      setPlatformFeeType(order.platformFeeType);
-      setPlatformFeeValue(order.platformFeeValue > 0 ? String(order.platformFeeValue) : "");
       setDeposit(order.deposit > 0 ? String(order.deposit) : "");
-      setItems(
-        order.items.map((i) => ({
-          product: {
-            id: i.productId,
-            name: i.productName,
-            sku: i.productSku,
-            color: i.productColor,
-            size: i.productSize,
-            categoryId: null,
-            categoryName: null,
-            qrCode: null,
-            imageUri: i.productImageUri,
-            price: i.unitPrice,
-            costPrice: i.costPrice,
-            stock: i.currentStock,
-            createdAt: 0,
-            updatedAt: 0,
-          },
-          quantity: i.quantity,
-          isGift: i.isGift,
-        })),
-      );
+      const allItems = order.items.map((i) => ({
+        product: {
+          id: i.productId,
+          name: i.productName,
+          sku: i.productSku,
+          color: i.productColor,
+          size: i.productSize,
+          categoryId: null,
+          categoryName: null,
+          qrCode: null,
+          imageUri: i.productImageUri,
+          price: i.unitPrice,
+          costPrice: i.costPrice,
+          stock: i.currentStock,
+          createdAt: 0,
+          updatedAt: 0,
+        } as Product,
+        quantity: i.quantity,
+        isGift: i.isGift,
+      }));
+      setItems(allItems.filter((i) => !i.isGift));
+      setGiftItems(allItems.filter((i) => i.isGift));
       setLoading(false);
     })();
+
+    // Clear edit lock on unmount or tab close
+    const handleBeforeUnload = () => {
+      orderService.clearEditingBy(editId, sessionId);
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      orderService.clearEditingBy(editId, sessionId);
+    };
   }, [editId, router]);
 
-  const handleAddProduct = (product: Product) => {
-    setItems((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i,
-        );
-      }
-      return [...prev, { product, quantity: 1, isGift: false }];
-    });
+  const handlePickerConfirm = (selections: { product: Product; quantity: number }[]) => {
+    setItems(selections.map((s) => ({
+      product: s.product,
+      quantity: s.quantity,
+      isGift: false,
+    })));
+  };
+
+  const handleGiftPickerConfirm = (selections: { product: Product; quantity: number }[]) => {
+    setGiftItems(selections.map((s) => ({
+      product: s.product,
+      quantity: s.quantity,
+      isGift: true,
+    })));
   };
 
   const updateQuantity = (productId: string, delta: number) => {
@@ -122,17 +137,25 @@ function CreateOrderForm() {
     setItems((prev) => prev.filter((i) => i.product.id !== productId));
   };
 
-  const toggleGift = (productId: string) => {
-    setItems((prev) =>
-      prev.map((i) =>
-        i.product.id === productId ? { ...i, isGift: !i.isGift } : i,
-      ),
+  const updateGiftQuantity = (productId: string, delta: number) => {
+    setGiftItems((prev) =>
+      prev
+        .map((i) =>
+          i.product.id === productId
+            ? { ...i, quantity: Math.max(0, i.quantity + delta) }
+            : i,
+        )
+        .filter((i) => i.quantity > 0),
     );
   };
 
+  const removeGiftItem = (productId: string) => {
+    setGiftItems((prev) => prev.filter((i) => i.product.id !== productId));
+  };
+
   // Calculations
+  const allItems = [...items, ...giftItems];
   const subtotal = items
-    .filter((i) => !i.isGift)
     .reduce((s, i) => s + i.product.price * i.quantity, 0);
   const discountAmount =
     discountType === "percent"
@@ -141,7 +164,6 @@ function CreateOrderForm() {
   const shippingFeeNum = parseNumber(shippingFee);
   const total = Math.max(0, subtotal - discountAmount) + shippingFeeNum;
   const depositNum = parseNumber(deposit);
-  const platformFeeNum = parseNumber(platformFeeValue);
 
   const handleSave = async () => {
     if (!customerName.trim()) {
@@ -152,7 +174,6 @@ function CreateOrderForm() {
     setSaving(true);
     try {
       const data = {
-        orderCode: orderCode.trim() || undefined,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         customerAddress: customerAddress.trim(),
@@ -160,11 +181,11 @@ function CreateOrderForm() {
         discountType,
         discountValue: parseNumber(discountValue),
         shippingFee: shippingFeeNum,
-        orderType,
-        platformFeeType,
-        platformFeeValue: platformFeeNum,
+        orderType: "normal" as const,
+        platformFeeType: "percent" as const,
+        platformFeeValue: 0,
         deposit: depositNum,
-        items: items.map((i) => ({
+        items: allItems.map((i) => ({
           productId: i.product.id,
           quantity: i.quantity,
           unitPrice: i.product.price,
@@ -180,6 +201,7 @@ function CreateOrderForm() {
 
       if (editId) {
         await orderService.update(editId, data);
+        await orderService.clearEditingBy(editId, sessionIdRef.current);
         router.push(`/orders/${editId}`);
       } else {
         const order = await orderService.create(data);
@@ -205,7 +227,7 @@ function CreateOrderForm() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 pb-24 lg:pb-8 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <button onClick={() => router.back()} className="text-sm text-muted hover:text-gray-700">
+        <button onClick={() => router.push("/orders")} className="text-sm text-muted hover:text-gray-700">
           ← Quay lại
         </button>
         <h1 className="text-lg font-bold text-gray-900">
@@ -219,15 +241,6 @@ function CreateOrderForm() {
         <h3 className="text-sm font-bold text-gray-900">Thông tin khách hàng</h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-muted font-medium">Mã đơn</label>
-            <input
-              value={orderCode}
-              onChange={(e) => setOrderCode(e.target.value)}
-              placeholder="Mã đơn hàng (tùy chọn)"
-              className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
-          </div>
           <div>
             <label className="text-xs text-muted font-medium">Tên khách hàng *</label>
             <input
@@ -267,51 +280,6 @@ function CreateOrderForm() {
             />
           </div>
         </div>
-      </div>
-
-      {/* Order type */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-        <h3 className="text-sm font-bold text-gray-900">Loại đơn</h3>
-        <div className="flex gap-2">
-          {ORDER_TYPES.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setOrderType(t.value)}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                orderType === t.value
-                  ? "bg-primary text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {orderType !== "normal" && (
-          <div className="flex items-center gap-2 mt-2">
-            <label className="text-xs text-muted font-medium">Phí nền tảng</label>
-            <div className="flex gap-1">
-              {(["percent", "vnd"] as PlatformFeeType[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setPlatformFeeType(t)}
-                  className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                    platformFeeType === t ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
-                  }`}
-                >
-                  {t === "percent" ? "%" : "VND"}
-                </button>
-              ))}
-            </div>
-            <input
-              value={platformFeeValue}
-              onChange={(e) => setPlatformFeeValue(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="0"
-              className="w-24 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-        )}
       </div>
 
       {/* Products */}
@@ -357,7 +325,7 @@ function CreateOrderForm() {
                     {[item.product.color, item.product.size].filter(Boolean).join(" | ")}
                   </p>
                   <p className="text-xs text-primary font-semibold mt-0.5">
-                    {item.isGift ? "Quà tặng" : formatVND(item.product.price)}
+                    {formatVND(item.product.price)}
                   </p>
                   <div className="flex items-center gap-3 mt-1.5">
                     <div className="flex items-center border border-gray-200 rounded-lg">
@@ -378,16 +346,6 @@ function CreateOrderForm() {
                       </button>
                     </div>
                     <button
-                      onClick={() => toggleGift(item.product.id)}
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                        item.isGift
-                          ? "bg-pink-100 text-pink-600"
-                          : "bg-gray-100 text-gray-400 hover:bg-pink-50 hover:text-pink-500"
-                      }`}
-                    >
-                      {item.isGift ? "✓ Quà tặng" : "Tặng"}
-                    </button>
-                    <button
                       onClick={() => removeItem(item.product.id)}
                       className="text-xs text-red-400 hover:text-red-600"
                     >
@@ -396,13 +354,90 @@ function CreateOrderForm() {
                   </div>
                 </div>
                 <span className="text-sm font-semibold text-gray-900 shrink-0">
-                  {item.isGift ? "-" : formatVND(item.product.price * item.quantity)}
+                  {formatVND(item.product.price * item.quantity)}
                 </span>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Gift Items */}
+      {giftItemsEnabled && (
+        <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
+          <div className="px-5 py-3 border-b border-green-100 flex items-center justify-between bg-green-50/50">
+            <h3 className="text-sm font-bold text-green-600">Quà tặng kèm ({giftItems.length})</h3>
+            <button
+              onClick={() => setGiftPickerVisible(true)}
+              className="text-xs font-semibold text-green-600 hover:underline"
+            >
+              + Thêm quà tặng
+            </button>
+          </div>
+
+          {giftItems.length === 0 ? (
+            <div className="px-5 py-6 text-center">
+              <p className="text-sm text-muted">Chưa có quà tặng</p>
+              <button
+                onClick={() => setGiftPickerVisible(true)}
+                className="mt-1.5 text-sm font-semibold text-green-600 hover:underline"
+              >
+                Thêm quà tặng
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-green-50">
+              {giftItems.map((item) => (
+                <div key={item.product.id} className="px-5 py-3 flex items-start gap-3">
+                  {item.product.imageUri ? (
+                    <img
+                      src={item.product.imageUri}
+                      alt={item.product.name}
+                      className="w-10 h-10 rounded-lg object-cover bg-gray-100 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                      <span className="text-gray-400 text-xs">🎁</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{item.product.name}</p>
+                    <p className="text-xs text-muted">
+                      {[item.product.color, item.product.size].filter(Boolean).join(" | ")}
+                    </p>
+                    <p className="text-xs text-green-600 font-semibold mt-0.5">Quà tặng</p>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <div className="flex items-center border border-gray-200 rounded-lg">
+                        <button
+                          onClick={() => updateGiftQuantity(item.product.id, -1)}
+                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                        >
+                          -
+                        </button>
+                        <span className="px-2 text-sm font-semibold min-w-[24px] text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateGiftQuantity(item.product.id, 1)}
+                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => removeGiftItem(item.product.id)}
+                        className="text-xs text-red-400 hover:text-red-600"
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Pricing */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
@@ -416,7 +451,7 @@ function CreateOrderForm() {
               <button
                 key={t}
                 onClick={() => setDiscountType(t)}
-                className={`px-2.5 py-1 rounded text-xs font-semibold ${
+                className={`px-4 py-2 rounded-lg text-sm font-semibold ${
                   discountType === t ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
                 }`}
               >
@@ -500,8 +535,15 @@ function CreateOrderForm() {
       <ProductPickerModal
         open={pickerVisible}
         onClose={() => setPickerVisible(false)}
-        onSelect={handleAddProduct}
-        excludeIds={[]}
+        onConfirm={handlePickerConfirm}
+        initialSelections={items.map((i) => ({ product: i.product, quantity: i.quantity }))}
+      />
+
+      <ProductPickerModal
+        open={giftPickerVisible}
+        onClose={() => setGiftPickerVisible(false)}
+        onConfirm={handleGiftPickerConfirm}
+        initialSelections={giftItems.map((i) => ({ product: i.product, quantity: i.quantity }))}
       />
     </div>
   );

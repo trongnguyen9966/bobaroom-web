@@ -121,7 +121,10 @@ export function calcTotals(order: Order, items: OrderItem[]) {
     .filter((i) => !i.isGift)
     .map((i) => i.productName)
     .join(', ');
-  return { subtotal, discountAmount, total, platformFeeAmount, itemCount, itemNames };
+  const costOfGoods = items
+    .filter((i) => !i.isGift)
+    .reduce((s, i) => s + (i.costPrice ?? 0) * i.quantity, 0);
+  return { subtotal, discountAmount, total, platformFeeAmount, itemCount, itemNames, costOfGoods };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -514,6 +517,22 @@ export const orderService = {
       const items = storedItems.map((i) => mapStoredItem(i, id));
       callback({ ...order, items, ...calcTotals(order, items) });
     });
+  },
+
+  async setEditingBy(orderId: string, sessionId: string): Promise<void> {
+    await updateDoc(doc(db, ORDERS, orderId), { editingBy: sessionId, updatedAt: Date.now() });
+  },
+
+  async clearEditingBy(orderId: string, sessionId: string): Promise<void> {
+    const snap = await getDoc(doc(db, ORDERS, orderId));
+    if (snap.exists() && snap.data()?.editingBy === sessionId) {
+      await updateDoc(doc(db, ORDERS, orderId), { editingBy: null, updatedAt: Date.now() });
+    }
+  },
+
+  async checkEditingBy(orderId: string): Promise<string | null> {
+    const snap = await getDoc(doc(db, ORDERS, orderId));
+    return snap.data()?.editingBy ?? null;
   },
 
   async confirmWaiting(orderIds: string[]): Promise<void> {
