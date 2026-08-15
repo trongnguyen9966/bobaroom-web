@@ -1,0 +1,90 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ensureAuth } from "@/services/firebase";
+
+const NAV_ITEMS = [
+  { href: "/orders", label: "Đơn hàng", icon: "📋", activeIcon: "📋" },
+  { href: "/orders/create", label: "Tạo đơn", icon: "➕", activeIcon: "➕" },
+  { href: "/history", label: "Lịch sử", icon: "🕒", activeIcon: "🕒" },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    ensureAuth().then(() => setAuthReady(true)).catch(console.error);
+  }, []);
+
+  if (!authReady) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-muted text-sm">Đang kết nối...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col lg:flex-row min-h-screen">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex lg:flex-col lg:w-56 bg-white border-r border-border shrink-0">
+        <div className="p-5 border-b border-border">
+          <Link href="/orders" className="text-xl font-bold text-primary">
+            BobaRoom
+          </Link>
+        </div>
+        <nav className="flex-1 p-3 space-y-1">
+          {NAV_ITEMS.map((item) => {
+            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/orders/create");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-blue-50 text-primary"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 min-h-screen pb-16 lg:pb-0 overflow-auto">
+        {children}
+      </main>
+
+      {/* Mobile bottom nav */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-border z-50 safe-area-bottom">
+        <div className="flex items-center justify-around h-14">
+          {NAV_ITEMS.map((item) => {
+            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/orders/create");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 ${
+                  isActive ? "text-primary" : "text-gray-400"
+                }`}
+              >
+                <span className="text-lg">{item.icon}</span>
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}

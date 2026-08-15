@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary: #208AEF;
+  --color-primary-hover: #1a6fc2;
+  --color-background: #F9FAFB;
+  --color-foreground: #111827;
+  --color-card: #ffffff;
+  --color-border: #E5E7EB;
+  --color-muted: #6B7280;
+  --color-muted-light: #9CA3AF;
+  --font-sans: var(--font-geist);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
+
+/* Status colors */
+.status-draft { --status-bg: #F3F4F6; --status-text: #6B7280; }
+.status-confirmed { --status-bg: #D1FAE5; --status-text: #065F46; }
+.status-preparing { --status-bg: #DBEAFE; --status-text: #1E40AF; }
+.status-packed { --status-bg: #EDE9FE; --status-text: #5B21B6; }
+.status-shipped { --status-bg: #FEF3C7; --status-text: #92400E; }
+.status-cancelled { --status-bg: #FEE2E2; --status-text: #991B1B; }
+.status-completed { --status-bg: #D1FAE5; --status-text: #059669; }
+.status-deleted { --status-bg: #F3F4F6; --status-text: #9CA3AF; }
+
+/* Order card left border colors */
+.border-status-draft { border-left-color: #9CA3AF; }
+.border-status-confirmed { border-left-color: #10B981; }
+.border-status-preparing { border-left-color: #3B82F6; }
+.border-status-packed { border-left-color: #8B5CF6; }
+.border-status-shipped { border-left-color: #F59E0B; }
+.border-status-cancelled { border-left-color: #EF4444; }
+.border-status-completed { border-left-color: #059669; }
+.border-status-deleted { border-left-color: #D1D5DB; }
