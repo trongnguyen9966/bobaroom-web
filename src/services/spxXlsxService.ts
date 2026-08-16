@@ -4,28 +4,28 @@ import { orderService } from './orderService';
 import { getFullProvinceName, parseVietnameseAddress } from './addressLookupService';
 
 const SPX_HEADERS = [
-  '*Ma don hang', '*Ten nguoi nhan', '*So dien thoai',
-  '*Tinh/Thanh Pho', '*Xa/Phuong',
-  '*Dia chi chi tiet', 'Luu y ve dia chi', 'Ma buu chinh',
-  '*Ten san pham',
-  'So luong (Thong tin bat buoc khi chon Giao hang mot phan & Thu COD)',
-  'Gia tien (Thong tin bat buoc khi chon Giao hang mot phan & Thu COD)',
-  '*Tong can nang buu gui (KG)',
-  'Chieu dai (CM)', 'Chieu rong (CM)', 'Chieu cao (CM)',
-  'Ma khach hang',
-  '*Gia tri don hang',
-  '*Giao hang mot phan (Y/N)',
-  '*Cho phep thu hang (Y/N)',
-  '*Cho xem hang, khong cho thu (Y/N)',
-  'Thu phi tu choi nhan hang (Y/N)',
-  'Phi tu choi nhan hang can thu',
+  '*Mã đơn hàng', '*Tên người nhận', '*Số điện thoại',
+  '*Tỉnh/Thành Phố', '*Xã/Phường',
+  '*Địa chỉ chi tiết', 'Lưu ý về địa chỉ', 'Mã bưu chính',
+  '*Tên sản phẩm',
+  'Số lượng (Thông tin bắt buộc khi chọn Giao hàng một phần & Thu COD)',
+  'Giá tiền (Thông tin bắt buộc khi chọn Giao hàng một phần & Thu COD)',
+  '*Tổng cân nặng bưu gửi (KG)',
+  'Chiều dài (CM)', 'Chiều rộng (CM)', 'Chiều cao (CM)',
+  'Mã khách hàng',
+  '*Giá trị đơn hàng',
+  '*Giao hàng một phần (Y/N)',
+  '*Cho phép thử hàng (Y/N)',
+  '*Cho xem hàng, không cho thử (Y/N)',
+  'Thu phí từ chối nhận hàng (Y/N)',
+  'Phí từ chối nhận hàng cần thu',
   '*Thu COD (Y/N)',
-  'So tien COD',
-  'buu gui gia tri cao (Y/N)',
-  '*Hinh thuc thanh Toan',
-  'Luu y giao hang',
-  'Nhac nho dien dung so tien COD',
-  'Don cho hoan thanh neu o duoi hien "Du dieu kien"',
+  'Số tiền COD',
+  'bưu gửi giá trị cao (Y/N)',
+  '*Hình thức thanh Toán',
+  'Lưu ý giao hàng',
+  'Nhắc nhở điền đúng số tiền COD',
+  'Đơn chờ hoàn thành nếu ở dưới hiện "Đủ điều kiện"',
 ];
 
 export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: number }> {
@@ -75,10 +75,10 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
       isCod ? 'Y' : 'N',
       isCod ? codAmount : '',
       total,
-      'Nguoi gui tra',
+      'Người gửi trả',
       order.notes ?? '',
       '',
-      'Du dieu kien',
+      'Đủ điều kiện',
     ];
   });
 
@@ -107,7 +107,7 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
   const dd = String(today.getDate()).padStart(2, '0');
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const yyyy = today.getFullYear();
-  const filename = `SPX_${dd}${mm}${yyyy}.xlxs`;
+  const filename = `SPX_${dd}${mm}${yyyy}.xlsx`;
 
   const blob = new Blob([arrayBuffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
