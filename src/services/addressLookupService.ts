@@ -129,7 +129,16 @@ function matchProvince(tokens: string[]): { province: Province; tokenIndex: numb
   return null;
 }
 
-function matchWardInToken(token: string, wards: Ward[]): string | null {
+function matchWardInTokenFull(token: string, wards: Ward[]): string | null {
+  const norm = normalize(token);
+  for (const w of wards) {
+    const wNorm = normalize(w);
+    if (norm === wNorm) return w;
+  }
+  return null;
+}
+
+function matchWardInTokenExact(token: string, wards: Ward[]): string | null {
   const norm = normalize(token);
   const stripped = normalize(stripPrefix(token));
 
@@ -140,18 +149,38 @@ function matchWardInToken(token: string, wards: Ward[]): string | null {
     if (norm === wNorm || norm === wStripped || stripped === wStripped || stripped === wNorm) {
       return w;
     }
+  }
+
+  return null;
+}
+
+function matchWardInTokenFuzzy(token: string, wards: Ward[]): string | null {
+  const norm = normalize(token);
+  const stripped = normalize(stripPrefix(token));
+
+  for (const w of wards) {
+    const wStripped = normalize(stripPrefix(w));
 
     if (wStripped.length >= 1 && (norm.includes(wStripped) || stripped.includes(wStripped))) {
       if (wStripped.length < 4 && /^\d+$/.test(wStripped)) {
         const wardPattern = new RegExp(`(?:phuong|p\\.?)\\s*${wStripped}(?:\\s|$|,)`, 'i');
         if (wardPattern.test(norm)) return w;
       } else if (wStripped.length >= 4) {
-        return w;
+        // Require word-boundary match to avoid false positives
+        // e.g. "uong bi" should NOT match inside "phuong binh tan"
+        const wbRegex = new RegExp(`(?:^|\\s)${wStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+        if (wbRegex.test(norm) || wbRegex.test(stripped)) {
+          return w;
+        }
       }
     }
   }
 
   return null;
+}
+
+function matchWardInToken(token: string, wards: Ward[]): string | null {
+  return matchWardInTokenExact(token, wards) ?? matchWardInTokenFuzzy(token, wards);
 }
 
 function matchWard(tokens: string[], wards: Ward[], usedIndices: Set<number>): string | null {
@@ -169,10 +198,27 @@ function matchWard(tokens: string[], wards: Ward[], usedIndices: Set<number>): s
 }
 
 function matchWardGlobal(tokens: string[]): { province: Province; ward: string; tokenIndex: number } | null {
+  // Pass 1: full name match (e.g. "phuong binh tan" === "phuong binh tan")
   for (let i = tokens.length - 1; i >= 0; i--) {
     const token = tokens[i].trim();
     for (const p of provinces) {
-      const result = matchWardInToken(token, p.w);
+      const result = matchWardInTokenFull(token, p.w);
+      if (result) return { province: p, ward: result, tokenIndex: i };
+    }
+  }
+  // Pass 2: stripped exact matches (e.g. "binh tan" === "binh tan")
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = tokens[i].trim();
+    for (const p of provinces) {
+      const result = matchWardInTokenExact(token, p.w);
+      if (result) return { province: p, ward: result, tokenIndex: i };
+    }
+  }
+  // Pass 3: fuzzy/substring matches
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = tokens[i].trim();
+    for (const p of provinces) {
+      const result = matchWardInTokenFuzzy(token, p.w);
       if (result) return { province: p, ward: result, tokenIndex: i };
     }
   }
