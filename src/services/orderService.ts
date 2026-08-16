@@ -535,6 +535,24 @@ export const orderService = {
     return snap.data()?.editingBy ?? null;
   },
 
+  async getItems(orderId: string): Promise<OrderItem[]> {
+    const snap = await getDoc(doc(db, ORDERS, orderId));
+    const items: StoredItem[] = snap.data()?.items ?? [];
+    return items.map((i) => mapStoredItem(i, orderId));
+  },
+
+  async applyFreeShipping(id: string): Promise<void> {
+    await updateDoc(doc(db, ORDERS, id), { shippingFee: 0, updatedAt: Date.now() });
+  },
+
+  async updateCreatedAt(id: string, createdAt: number): Promise<void> {
+    await updateDoc(doc(db, ORDERS, id), { createdAt, updatedAt: Date.now() });
+  },
+
+  async setWaitingStatus(orderId: string, isWaiting: boolean): Promise<void> {
+    await updateDoc(doc(db, ORDERS, orderId), { isWaiting, updatedAt: Date.now() });
+  },
+
   async confirmWaiting(orderIds: string[]): Promise<void> {
     const batch = writeBatch(db);
     const now = Date.now();

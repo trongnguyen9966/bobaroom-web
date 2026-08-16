@@ -6,6 +6,7 @@ import { OrderStatusBadge, getStatusLabel } from "@/components/ui/OrderStatusBad
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
+import { inventoryService } from "@/services/inventoryService";
 import { exportSPXToXlsx } from "@/services/spxXlsxService";
 import {
   DateFilter,
@@ -191,10 +192,18 @@ export default function OrdersPage() {
     try {
       for (const order of selected) {
         const extra: Parameters<typeof orderService.updateStatus>[2] = {};
-        if (targetStatus === "shipped") {
+
+        if (targetStatus === "cancelled") {
+          // Restore stock for confirmed+ orders
+          if (["confirmed", "preparing", "packed", "shipped"].includes(order.status)) {
+            const full = await orderService.getById(order.id);
+            if (full) await inventoryService.restoreStock(full.items);
+          }
+        } else if (targetStatus === "shipped") {
           extra.shippedAt = Date.now();
           extra.lockedTotal = order.total;
         }
+
         await orderService.updateStatus(order.id, targetStatus, extra);
       }
       exitSelectMode();

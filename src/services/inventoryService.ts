@@ -132,6 +132,41 @@ export const inventoryService = {
   /**
    * Return current stock for a list of product IDs.
    */
+  async removeOutOfStockItems(orderId: string): Promise<string[]> {
+    const orderRef = doc(db, ORDERS, orderId);
+    const removedItemIds: string[] = [];
+
+    await runTransaction(db, async (tx) => {
+      const orderSnap = await tx.get(orderRef);
+      const orderItems: Array<{ id: string; productId: string; quantity: number }> =
+        orderSnap.data()?.items ?? [];
+      if (orderItems.length === 0) return;
+
+      const productRefs = orderItems.map((i) => doc(db, PRODUCTS, i.productId));
+      const productSnaps = await Promise.all(productRefs.map((r) => tx.get(r)));
+
+      const stockMap = new Map<string, number>();
+      for (const snap of productSnaps) {
+        if (snap.exists()) stockMap.set(snap.id, snap.data()!.stock as number);
+      }
+
+      const keptItems = orderItems.filter((item) => {
+        const stock = stockMap.get(item.productId) ?? 0;
+        if (stock < item.quantity) {
+          removedItemIds.push(item.id);
+          return false;
+        }
+        return true;
+      });
+
+      if (removedItemIds.length > 0) {
+        tx.update(orderRef, { items: keptItems, updatedAt: Date.now() });
+      }
+    });
+
+    return removedItemIds;
+  },
+
   async getStockMap(productIds: string[]): Promise<Map<string, number>> {
     if (productIds.length === 0) return new Map();
     const snaps = await Promise.all(productIds.map((pid) => getDoc(doc(db, PRODUCTS, pid))));

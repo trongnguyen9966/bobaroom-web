@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import { OrderStatusBadge, getStatusLabel } from "@/components/ui/OrderStatusBadge";
 import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
+import { inventoryService } from "@/services/inventoryService";
+import { settingsService } from "@/services/settingsService";
 import { OrderStatus, OrderWithItems, PaymentMethod } from "@/types";
 import { formatVND } from "@/utils/currency";
 import { formatDateTime } from "@/utils/date";
@@ -117,13 +119,74 @@ export default function OrderDetailPage() {
   };
 
   const handleConfirmOrder = async (method: PaymentMethod) => {
+    if (!order) return;
     setPaymentConfirmOpen(false);
     setActionLoading(true);
     try {
+      // 1. Deduct stock
+      const orderItems = await orderService.getItems(id);
+      const { success, outOfStockProductIds } = await inventoryService.deductStock(orderItems);
+
+      if (!success) {
+        // Remove out-of-stock items from the order
+        const removedIds = await inventoryService.removeOutOfStockItems(id);
+        const updatedItems = orderItems.filter((i) => !removedIds.includes(i.id));
+
+        if (updatedItems.length === 0) {
+          alert("Tất cả sản phẩm đã hết hàng. Không thể xác nhận đơn hàng.");
+          setActionLoading(false);
+          return;
+        }
+        // Deduct stock for remaining items
+        await inventoryService.deductStock(updatedItems);
+        const removedNames = order.items
+          .filter((i) => outOfStockProductIds.includes(i.productId))
+          .map((i) => i.productName)
+          .join(", ");
+        alert(`Đã xác nhận. Một số sản phẩm hết hàng đã bị xóa: ${removedNames}`);
+      }
+
+      // 2. Check free shipping
+      const settings = await settingsService.get();
+      if (settings.freeShippingEnabled) {
+        const subtotalAfterDiscount = order.subtotal - order.discountAmount;
+        const methodMatches =
+          settings.freeShippingPaymentMethod === "both" ||
+          (settings.freeShippingPaymentMethod === "cod" && method === "cod") ||
+          (settings.freeShippingPaymentMethod === "paid" && method !== "cod");
+        if (subtotalAfterDiscount >= settings.freeShippingThreshold && methodMatches) {
+          await orderService.applyFreeShipping(id);
+        }
+      }
+
+      // 3. Update status
+      const now = Date.now();
       await orderService.updateStatus(id, "confirmed", {
         paymentMethod: method,
-        confirmedAt: Date.now(),
+        confirmedAt: now,
       });
+
+      // 4. Cleanup draft orders with 0-stock products
+      const deductedItems = order.items
+        .filter((i) => !i.isGift)
+        .map((i) => ({ productId: i.productId, productName: i.productName }));
+      await inventoryService.cleanupDraftOrdersForProducts(id, deductedItems);
+
+      // 5. Backdate createdAt if confirmed on different day
+      const creationDay = new Date(order.createdAt).toDateString();
+      const confirmDay = new Date(now).toDateString();
+      if (creationDay !== confirmDay) {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        await orderService.updateCreatedAt(id, startOfToday.getTime());
+      }
+
+      // 6. Check waiting order
+      if (settings.waitingOrderEnabled && settings.waitingOrderCategoryIds.length > 0) {
+        // Note: OrderItem doesn't have categoryId, skip waiting check on web
+        // (matching mobile which loads products to check categories)
+      }
+
       await load();
     } catch {
       alert("Không thể xác nhận đơn hàng");
@@ -137,6 +200,10 @@ export default function OrderDetailPage() {
     if (!confirm("Bạn có chắc muốn hủy đơn hàng này?")) return;
     setActionLoading(true);
     try {
+      // Restore stock if order was confirmed+
+      if (["confirmed", "preparing", "packed", "shipped"].includes(order.status)) {
+        await inventoryService.restoreStock(order.items);
+      }
       await orderService.updateStatus(id, "cancelled");
       await load();
     } catch {
