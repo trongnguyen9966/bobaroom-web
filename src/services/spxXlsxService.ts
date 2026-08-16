@@ -107,7 +107,7 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
   const dd = String(today.getDate()).padStart(2, '0');
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const yyyy = today.getFullYear();
-  const filename = `SPX_${dd}${mm}${yyyy}.xlsx`;
+  const filename = `SPX_${dd}${mm}${yyyy}.xlxs`;
 
   const blob = new Blob([arrayBuffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
