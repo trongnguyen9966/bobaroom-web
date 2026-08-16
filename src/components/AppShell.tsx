@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-h-0 pb-16 lg:pb-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-h-0 pb-16 lg:pb-0 overflow-auto">
         {children}
       </main>
 

@@ -58,7 +58,7 @@ export default function InventoryPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-white border-b border-border px-4 sm:px-6 py-4 space-y-3">
+      <div className="bg-white border-b border-border px-4 sm:px-6 py-4 space-y-3 sticky top-0 z-40">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">Kho hàng</h1>
           <div className="flex items-center gap-2">

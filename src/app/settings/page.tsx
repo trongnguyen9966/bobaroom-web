@@ -66,7 +66,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="bg-white border-b border-border px-4 sm:px-6 py-4">
+      <div className="bg-white border-b border-border px-4 sm:px-6 py-4 sticky top-0 z-40">
         <h1 className="text-xl font-bold text-gray-900">Cài đặt</h1>
       </div>
 
