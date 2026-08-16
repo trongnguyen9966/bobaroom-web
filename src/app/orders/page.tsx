@@ -58,8 +58,9 @@ const DEFAULT_FILTER: DateFilter = { mode: "day", date: new Date() };
 interface Section { title: string; data: OrderSummary[] }
 
 function groupByDate(orders: OrderSummary[]): Section[] {
+  const sorted = [...orders].sort((a, b) => b.createdAt - a.createdAt);
   const map = new Map<string, OrderSummary[]>();
-  for (const o of orders) {
+  for (const o of sorted) {
     const key = new Date(o.createdAt).toDateString();
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(o);
