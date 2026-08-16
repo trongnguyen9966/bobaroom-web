@@ -5,7 +5,7 @@ import { getFullProvinceName, parseVietnameseAddress } from './addressLookupServ
 
 const SPX_HEADERS = [
   '*Mã đơn hàng', '*Tên người nhận', '*Số điện thoại',
-  '*Tỉnh/Thành Phố', '*Xã/Phường',
+  '*Tỉnh/Thành Phố', '*Quận/Huyện', '*Xã/Phường',
   '*Địa chỉ chi tiết', 'Lưu ý về địa chỉ', 'Mã bưu chính',
   '*Tên sản phẩm',
   'Số lượng (Thông tin bắt buộc khi chọn Giao hàng một phần & Thu COD)',
@@ -38,10 +38,12 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
     const codAmount = Math.max(0, total - (order.deposit ?? 0));
     const stored = {
       province: order.customerProvince,
+      district: order.customerDistrict,
       ward: order.customerWard,
     };
     const parsed = parseVietnameseAddress(order.customerAddress);
     const province = getFullProvinceName(stored.province || parsed.province);
+    const district = stored.district || '';
     const ward = stored.ward || parsed.ward;
     const items = order.items.filter((i) => !i.isGift && !i.isExchangeReturn);
 
@@ -56,6 +58,7 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
       order.customerName,
       order.customerPhone,
       province,
+      district,
       ward,
       order.customerAddress,
       '',
