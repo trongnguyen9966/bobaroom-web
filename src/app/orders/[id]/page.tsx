@@ -265,7 +265,7 @@ export default function OrderDetailPage() {
   const displayTotal = order.lockedTotal ?? order.total;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 pb-24 lg:pb-8 space-y-4">
+    <div className="max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 pb-24 lg:pb-8 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <button onClick={() => router.push("/orders")} className="text-sm text-muted hover:text-gray-700">
@@ -288,6 +288,10 @@ export default function OrderDetailPage() {
           </button>
         </div>
       </div>
+
+      <div className="lg:grid lg:grid-cols-5 lg:gap-6 space-y-4 lg:space-y-0">
+      {/* Left column: order info + items */}
+      <div className="lg:col-span-3 space-y-4">
 
       {/* Order info card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
@@ -427,6 +431,11 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      </div>{/* end left column */}
+
+      {/* Right column: totals + actions */}
+      <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-4 lg:self-start">
+
       {/* Totals */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
         <h3 className="text-sm font-bold text-gray-900 pb-1">Tổng tiền</h3>
@@ -561,6 +570,9 @@ export default function OrderDetailPage() {
           </button>
         )}
       </div>
+
+      </div>{/* end right column */}
+      </div>{/* end grid */}
 
       {/* Payment confirmation modal (for draft -> confirmed) */}
       <Modal open={paymentConfirmOpen} onClose={() => setPaymentConfirmOpen(false)} title="Chọn phương thức thanh toán">
