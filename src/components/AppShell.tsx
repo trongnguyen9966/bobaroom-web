@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen">
+    <div className="flex flex-col lg:flex-row h-screen">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-56 bg-white border-r border-border shrink-0">
         <div className="p-5 border-b border-border">
@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-h-screen pb-16 lg:pb-0 overflow-auto">
+      <main className="flex-1 flex flex-col min-h-0 pb-16 lg:pb-0 overflow-hidden">
         {children}
       </main>
 
