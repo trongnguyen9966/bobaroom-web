@@ -1,12 +1,26 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { ProductPickerModal } from "@/components/orders/ProductPickerModal";
+import { AddressPickerModal } from "@/components/orders/AddressPickerModal";
+import { AutoFillModal } from "@/components/orders/AutoFillModal";
 import { orderService } from "@/services/orderService";
 import { settingsService } from "@/services/settingsService";
 import {
+  lookupAddress,
+  detectOldAddress,
+  getProvinceNames,
+  getWardNames,
+  OldAddressWarning,
+} from "@/services/addressLookupService";
+import { parseCustomerText } from "@/utils/parseCustomerText";
+import {
+  AppSettings,
   DiscountType,
+  OrderType,
+  PaymentMethod,
+  PlatformFeeType,
   Product,
 } from "@/types";
 import { formatInputNumber, formatVND, parseNumber } from "@/utils/currency";
@@ -18,37 +32,65 @@ interface DraftItem {
   isGift: boolean;
 }
 
+const ORDER_TYPES: { value: OrderType; label: string }[] = [
+  { value: "normal", label: "Đơn Thường" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "shopee", label: "Shopee" },
+];
+
 function CreateOrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get("editId");
 
+  // Customer fields
+  const [orderCode, setOrderCode] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [customerProvince, setCustomerProvince] = useState("");
+  const [customerWard, setCustomerWard] = useState("");
   const [notes, setNotes] = useState("");
+  const [oldAddressWarning, setOldAddressWarning] = useState<OldAddressWarning | null>(null);
+
+  // Order config
+  const [orderType, setOrderType] = useState<OrderType>("normal");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [discountType, setDiscountType] = useState<DiscountType>("percent");
   const [discountValue, setDiscountValue] = useState("");
   const [shippingFee, setShippingFee] = useState("");
+  const [platformFeeType, setPlatformFeeType] = useState<PlatformFeeType>("percent");
+  const [platformFeeValue, setPlatformFeeValue] = useState("");
   const [deposit, setDeposit] = useState("");
+
+  // Items
   const [items, setItems] = useState<DraftItem[]>([]);
   const [giftItems, setGiftItems] = useState<DraftItem[]>([]);
+
+  // Modals
   const [pickerVisible, setPickerVisible] = useState(false);
   const [giftPickerVisible, setGiftPickerVisible] = useState(false);
+  const [addressPickerField, setAddressPickerField] = useState<"province" | "ward" | null>(null);
+  const [autoFillVisible, setAutoFillVisible] = useState(false);
+
+  // State
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!editId);
-  const [giftItemsEnabled, setGiftItemsEnabled] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [editingConfirmedOrder, setEditingConfirmedOrder] = useState(false);
   const sessionIdRef = useRef(generateId());
 
-  // Load settings
+  // Load settings + default shipping fee
   useEffect(() => {
-    const unsub = settingsService.subscribe((s) => {
-      setGiftItemsEnabled(s.giftItemsEnabled);
+    settingsService.get().then((s) => {
+      setAppSettings(s);
+      if (!editId && s.defaultShippingFeeEnabled && s.defaultShippingFee > 0) {
+        setShippingFee(String(s.defaultShippingFee));
+      }
     });
-    return () => unsub();
-  }, []);
+  }, [editId]);
 
-  // Load existing order for edit mode + set edit lock
+  // Load existing order for edit mode
   useEffect(() => {
     if (!editId) return;
     const sessionId = sessionIdRef.current;
@@ -60,13 +102,21 @@ function CreateOrderForm() {
         return;
       }
       await orderService.setEditingBy(editId, sessionId);
+      setOrderCode(order.orderCode ?? "");
       setCustomerName(order.customerName);
       setCustomerPhone(order.customerPhone);
       setCustomerAddress(order.customerAddress);
+      setCustomerProvince(order.customerProvince ?? "");
+      setCustomerWard(order.customerWard ?? "");
       setNotes(order.notes);
       setDiscountType(order.discountType);
       setDiscountValue(order.discountValue > 0 ? String(order.discountValue) : "");
       setShippingFee(order.shippingFee > 0 ? String(order.shippingFee) : "");
+      if (order.paymentMethod) setPaymentMethod(order.paymentMethod);
+      if (order.status !== "draft") setEditingConfirmedOrder(true);
+      setOrderType(order.orderType ?? "normal");
+      setPlatformFeeType(order.platformFeeType ?? "percent");
+      setPlatformFeeValue(order.platformFeeValue > 0 ? String(order.platformFeeValue) : "");
       setDeposit(order.deposit > 0 ? String(order.deposit) : "");
       const allItems = order.items.map((i) => ({
         product: {
@@ -93,7 +143,6 @@ function CreateOrderForm() {
       setLoading(false);
     })();
 
-    // Clear edit lock on unmount or tab close
     const handleBeforeUnload = () => {
       orderService.clearEditingBy(editId, sessionId);
     };
@@ -105,31 +154,18 @@ function CreateOrderForm() {
     };
   }, [editId, router]);
 
+  // Handlers
   const handlePickerConfirm = (selections: { product: Product; quantity: number }[]) => {
-    setItems(selections.map((s) => ({
-      product: s.product,
-      quantity: s.quantity,
-      isGift: false,
-    })));
+    setItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: false })));
   };
 
   const handleGiftPickerConfirm = (selections: { product: Product; quantity: number }[]) => {
-    setGiftItems(selections.map((s) => ({
-      product: s.product,
-      quantity: s.quantity,
-      isGift: true,
-    })));
+    setGiftItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: true })));
   };
 
   const updateQuantity = (productId: string, delta: number) => {
     setItems((prev) =>
-      prev
-        .map((i) =>
-          i.product.id === productId
-            ? { ...i, quantity: Math.max(0, i.quantity + delta) }
-            : i,
-        )
-        .filter((i) => i.quantity > 0),
+      prev.map((i) => i.product.id === productId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i),
     );
   };
 
@@ -139,13 +175,7 @@ function CreateOrderForm() {
 
   const updateGiftQuantity = (productId: string, delta: number) => {
     setGiftItems((prev) =>
-      prev
-        .map((i) =>
-          i.product.id === productId
-            ? { ...i, quantity: Math.max(0, i.quantity + delta) }
-            : i,
-        )
-        .filter((i) => i.quantity > 0),
+      prev.map((i) => i.product.id === productId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i),
     );
   };
 
@@ -153,17 +183,62 @@ function CreateOrderForm() {
     setGiftItems((prev) => prev.filter((i) => i.product.id !== productId));
   };
 
+  const handleAutoFill = (text: string) => {
+    const result = parseCustomerText(text);
+    if (result.name) setCustomerName(result.name);
+    if (result.phone) setCustomerPhone(result.phone);
+    if (result.address) setCustomerAddress(result.address);
+    const addrSource = result.address || text;
+    const addrResult = lookupAddress(addrSource);
+    if (addrResult.province) setCustomerProvince(addrResult.province);
+    if (addrResult.ward) setCustomerWard(addrResult.ward);
+    setOldAddressWarning(detectOldAddress(addrSource));
+  };
+
+  const handleAddressChange = (text: string) => {
+    setCustomerAddress(text);
+    setOldAddressWarning(detectOldAddress(text));
+  };
+
+  const handleProvinceSelect = (province: string) => {
+    setCustomerProvince(province);
+    setCustomerWard(""); // Reset ward when province changes
+    setAddressPickerField(null);
+  };
+
+  const handleWardSelect = (ward: string) => {
+    setCustomerWard(ward);
+    setAddressPickerField(null);
+  };
+
   // Calculations
   const allItems = [...items, ...giftItems];
-  const subtotal = items
-    .reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const discountAmount =
-    discountType === "percent"
-      ? subtotal * (parseNumber(discountValue) / 100)
-      : parseNumber(discountValue);
-  const shippingFeeNum = parseNumber(shippingFee);
-  const total = Math.max(0, subtotal - discountAmount) + shippingFeeNum;
+  const subtotal = items.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const discountNum = parseNumber(discountValue);
+  const discountAmount = discountType === "percent" ? subtotal * (discountNum / 100) : discountNum;
+  const shippingNum = parseNumber(shippingFee);
+  const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
+
+  const freeShippingQualifies = Boolean(
+    appSettings?.freeShippingEnabled &&
+    subtotalAfterDiscount >= (appSettings?.freeShippingThreshold ?? 0) &&
+    (appSettings?.freeShippingPaymentMethod === "both" ||
+     (appSettings?.freeShippingPaymentMethod === "cod" && paymentMethod === "cod") ||
+     (appSettings?.freeShippingPaymentMethod === "paid" && paymentMethod !== "cod")),
+  );
+
+  const total = subtotalAfterDiscount + (freeShippingQualifies ? 0 : shippingNum);
   const depositNum = parseNumber(deposit);
+  const platformFeeNum = parseNumber(platformFeeValue);
+  const platformFeeAmount = platformFeeType === "percent"
+    ? total * (platformFeeNum / 100)
+    : platformFeeNum;
+  const netRevenue = total - platformFeeAmount;
+
+  // Price rounding for display
+  const displayTotal = (appSettings?.priceRoundingEnabled && orderType === "normal")
+    ? settingsService.applyRounding(total, appSettings.priceRoundingMode)
+    : total;
 
   const handleSave = async () => {
     if (!customerName.trim()) {
@@ -174,21 +249,27 @@ function CreateOrderForm() {
     setSaving(true);
     try {
       const data = {
+        orderCode: orderCode.trim() || undefined,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         customerAddress: customerAddress.trim(),
+        customerProvince: customerProvince.trim(),
+        customerDistrict: "",
+        customerWard: customerWard.trim(),
         notes: notes.trim(),
+        paymentMethod,
         discountType,
-        discountValue: parseNumber(discountValue),
-        shippingFee: shippingFeeNum,
-        orderType: "normal" as const,
-        platformFeeType: "percent" as const,
-        platformFeeValue: 0,
+        discountValue: discountNum,
+        shippingFee: freeShippingQualifies ? 0 : shippingNum,
+        orderType,
+        platformFeeType,
+        platformFeeValue: platformFeeNum,
         deposit: depositNum,
         items: allItems.map((i) => ({
           productId: i.product.id,
           quantity: i.quantity,
-          unitPrice: i.product.price,
+          unitPrice: i.isGift ? 0 : i.product.price,
+          originalUnitPrice: i.isGift ? 0 : i.product.price,
           isGift: i.isGift,
           productName: i.product.name,
           productSku: i.product.sku,
@@ -236,11 +317,48 @@ function CreateOrderForm() {
         <div className="w-16" />
       </div>
 
+      {/* Order type */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+        <h3 className="text-sm font-bold text-gray-900">Loại đơn hàng</h3>
+        <div className="flex gap-2">
+          {ORDER_TYPES.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setOrderType(t.value)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                orderType === t.value
+                  ? "bg-primary text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Customer info */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-        <h3 className="text-sm font-bold text-gray-900">Thông tin khách hàng</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-900">Thông tin khách hàng</h3>
+          <button
+            onClick={() => setAutoFillVisible(true)}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            Tự điền
+          </button>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted font-medium">Mã đơn hàng</label>
+            <input
+              value={orderCode}
+              onChange={(e) => setOrderCode(e.target.value)}
+              placeholder="VD: DH001"
+              className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
           <div>
             <label className="text-xs text-muted font-medium">Tên khách hàng *</label>
             <input
@@ -255,7 +373,7 @@ function CreateOrderForm() {
             <input
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
-              placeholder="Số điện thoại"
+              placeholder="0900 000 000"
               type="tel"
               className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
@@ -264,10 +382,48 @@ function CreateOrderForm() {
             <label className="text-xs text-muted font-medium">Địa chỉ</label>
             <input
               value={customerAddress}
-              onChange={(e) => setCustomerAddress(e.target.value)}
+              onChange={(e) => handleAddressChange(e.target.value)}
               placeholder="Địa chỉ giao hàng"
               className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
+            {oldAddressWarning && (
+              <div className="mt-2 bg-red-50 border border-red-300 rounded-lg px-3 py-2">
+                <p className="text-xs font-semibold text-red-600">Địa chỉ cũ (trước sát nhập)</p>
+                <p className="text-xs text-red-600 mt-0.5">{oldAddressWarning.message}</p>
+                {oldAddressWarning.newProvince && (
+                  <div className="bg-orange-50 rounded-md px-2 py-1.5 mt-1.5">
+                    <p className="text-xs text-orange-700 font-medium">
+                      Gợi ý: Tỉnh/TP mới là &quot;{oldAddressWarning.newProvince}&quot;
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="text-xs text-muted font-medium">Tỉnh/Thành phố</label>
+            <button
+              onClick={() => setAddressPickerField("province")}
+              className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <span className={customerProvince ? "text-gray-900" : "text-gray-400"}>
+                {customerProvince || "Chọn tỉnh/thành phố"}
+              </span>
+              <span className="text-gray-400 text-xs">▼</span>
+            </button>
+          </div>
+          <div>
+            <label className="text-xs text-muted font-medium">Phường/Xã/Ấp</label>
+            <button
+              onClick={() => customerProvince && setAddressPickerField("ward")}
+              disabled={!customerProvince}
+              className={`mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 ${!customerProvince ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <span className={customerWard ? "text-gray-900" : "text-gray-400"}>
+                {customerWard || (customerProvince ? "Chọn phường/xã/ấp" : "Chọn tỉnh trước")}
+              </span>
+              <span className="text-gray-400 text-xs">▼</span>
+            </button>
           </div>
           <div className="sm:col-span-2">
             <label className="text-xs text-muted font-medium">Ghi chú</label>
@@ -363,7 +519,7 @@ function CreateOrderForm() {
       </div>
 
       {/* Gift Items */}
-      {giftItemsEnabled && (
+      {appSettings?.giftItemsEnabled && (
         <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
           <div className="px-5 py-3 border-b border-green-100 flex items-center justify-between bg-green-50/50">
             <h3 className="text-sm font-bold text-green-600">Quà tặng kèm ({giftItems.length})</h3>
@@ -439,13 +595,50 @@ function CreateOrderForm() {
         </div>
       )}
 
-      {/* Pricing */}
+      {/* Payment method */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-        <h3 className="text-sm font-bold text-gray-900">Chi phí</h3>
+        <h3 className="text-sm font-bold text-gray-900">Phương thức thanh toán</h3>
+        <div className="flex gap-2">
+          {([["cod", "COD"], ["paid", "Đã thanh toán"]] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => {
+                setPaymentMethod(val);
+                // Restore default shipping fee if switching away from free-shipping-qualifying method
+                if (appSettings && parseNumber(shippingFee) === 0) {
+                  const wouldQualifyFree = Boolean(
+                    appSettings.freeShippingEnabled &&
+                    subtotalAfterDiscount >= appSettings.freeShippingThreshold &&
+                    (appSettings.freeShippingPaymentMethod === "both" ||
+                      (appSettings.freeShippingPaymentMethod === "cod" && val === "cod") ||
+                      (appSettings.freeShippingPaymentMethod === "paid" && val !== "cod")),
+                  );
+                  if (!wouldQualifyFree && appSettings.defaultShippingFeeEnabled && appSettings.defaultShippingFee > 0) {
+                    setShippingFee(String(appSettings.defaultShippingFee));
+                  }
+                }
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                paymentMethod === val
+                  ? val === "cod"
+                    ? "bg-amber-100 text-amber-800 border-2 border-amber-300"
+                    : "bg-green-100 text-green-800 border-2 border-green-300"
+                  : "bg-gray-100 text-gray-500 border-2 border-transparent hover:bg-gray-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Discount & Shipping */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+        <h3 className="text-sm font-bold text-gray-900">Giảm giá & Phí vận chuyển</h3>
 
         {/* Discount */}
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted font-medium w-20">Giảm giá</label>
+          <label className="text-xs text-muted font-medium w-20 shrink-0">Giảm giá</label>
           <div className="flex gap-1">
             {(["percent", "vnd"] as DiscountType[]).map((t) => (
               <button
@@ -460,7 +653,7 @@ function CreateOrderForm() {
             ))}
           </div>
           <input
-            value={discountValue}
+            value={discountType === "vnd" ? (discountValue ? formatInputNumber(discountValue) : "") : discountValue}
             onChange={(e) => setDiscountValue(e.target.value.replace(/[^\d]/g, ""))}
             placeholder="0"
             className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -469,7 +662,7 @@ function CreateOrderForm() {
 
         {/* Shipping */}
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted font-medium w-20">Ship</label>
+          <label className="text-xs text-muted font-medium w-20 shrink-0">Ship</label>
           <input
             value={shippingFee ? formatInputNumber(shippingFee) : ""}
             onChange={(e) => setShippingFee(e.target.value.replace(/[^\d]/g, ""))}
@@ -477,61 +670,140 @@ function CreateOrderForm() {
             className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
-
-        {/* Deposit */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted font-medium w-20">Cọc</label>
-          <input
-            value={deposit ? formatInputNumber(deposit) : ""}
-            onChange={(e) => setDeposit(e.target.value.replace(/[^\d]/g, ""))}
-            placeholder="0"
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-        </div>
       </div>
+
+      {/* Platform fee (TikTok / Shopee) */}
+      {orderType !== "normal" && (
+        <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 space-y-3">
+          <h3 className="text-sm font-bold text-purple-600">
+            Phí sàn {orderType === "tiktok" ? "TikTok" : "Shopee"}
+          </h3>
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1">
+              {(["percent", "vnd"] as PlatformFeeType[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setPlatformFeeType(t)}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold ${
+                    platformFeeType === t ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {t === "percent" ? "%" : "VND"}
+                </button>
+              ))}
+            </div>
+            <input
+              value={platformFeeType === "vnd" ? (platformFeeValue ? formatInputNumber(platformFeeValue) : "") : platformFeeValue}
+              onChange={(e) => setPlatformFeeValue(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="0"
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Summary */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
+        <h3 className="text-sm font-bold text-gray-900 pb-1">Tóm tắt đơn hàng</h3>
         <div className="flex justify-between text-sm">
           <span className="text-muted">Tạm tính</span>
           <span>{formatVND(subtotal)}</span>
         </div>
         {discountAmount > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Giảm giá</span>
-            <span className="text-red-500">-{formatVND(discountAmount)}</span>
-          </div>
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Giảm giá</span>
+              <span className="text-red-500">-{formatVND(discountAmount)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Giá sau giảm</span>
+              <span className="text-green-600 font-semibold">{formatVND(subtotalAfterDiscount)}</span>
+            </div>
+          </>
         )}
-        {shippingFeeNum > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Phí ship</span>
-            <span>{formatVND(shippingFeeNum)}</span>
-          </div>
-        )}
+        <div className="flex justify-between text-sm">
+          <span className="text-muted">Phí vận chuyển</span>
+          {freeShippingQualifies ? (
+            shippingNum > 0 ? (
+              <span className="flex items-center gap-2">
+                <span className="line-through text-gray-400">{formatVND(shippingNum)}</span>
+                <span className="text-xs font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Miễn phí</span>
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Miễn phí</span>
+            )
+          ) : shippingNum > 0 ? (
+            <span>{formatVND(shippingNum)}</span>
+          ) : (
+            <span className="text-green-600 font-semibold">Miễn phí</span>
+          )}
+        </div>
         <div className="flex justify-between items-center pt-2 border-t border-gray-100">
           <span className="font-bold text-gray-900">Tổng cộng</span>
-          <span className="text-xl font-bold text-primary">{formatVND(total)}</span>
+          <span className="text-xl font-bold text-primary">{formatVND(displayTotal)}</span>
+        </div>
+        {orderType !== "normal" && platformFeeAmount > 0 && (
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">
+                Phí sàn {orderType === "tiktok" ? "TikTok" : "Shopee"}
+                {platformFeeType === "percent" ? ` (${platformFeeValue}%)` : ""}
+              </span>
+              <span className="text-red-500">-{formatVND(platformFeeAmount)}</span>
+            </div>
+            <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+              <span className="font-semibold text-gray-900">Doanh thu thực tế</span>
+              <span className="font-bold text-green-600">{formatVND(netRevenue)}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Deposit */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted font-medium w-20 shrink-0">Khách cọc</label>
+          <input
+            value={deposit ? formatInputNumber(deposit) : ""}
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^\d]/g, "");
+              setDeposit(val);
+              if (parseNumber(val) > 0) setPaymentMethod("cod");
+            }}
+            placeholder="0"
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
         </div>
         {depositNum > 0 && (
           <div className="flex justify-between text-sm">
             <span className="text-muted">Còn thu hộ (COD)</span>
-            <span className="font-semibold">{formatVND(Math.max(0, total - depositNum))}</span>
+            <span className="font-bold text-gray-900">{formatVND(Math.max(0, displayTotal - depositNum))}</span>
           </div>
         )}
       </div>
 
-      {/* Save button */}
-      <div className="sticky bottom-0 bg-background pt-2 pb-4 lg:pb-0 safe-area-bottom">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-lg"
-        >
-          {saving ? "Đang lưu..." : editId ? "Cập nhật đơn hàng" : "Lưu đơn nháp"}
-        </button>
+      {/* Save buttons */}
+      <div className="sticky bottom-0 bg-background pt-2 pb-4 lg:pb-0 safe-area-bottom space-y-2">
+        {editingConfirmedOrder ? (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-lg"
+          >
+            {saving ? "Đang lưu..." : "Cập nhật đơn hàng"}
+          </button>
+        ) : (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-lg"
+          >
+            {saving ? "Đang lưu..." : "Lưu đơn nháp"}
+          </button>
+        )}
       </div>
 
-      {/* Product picker */}
+      {/* Modals */}
       <ProductPickerModal
         open={pickerVisible}
         onClose={() => setPickerVisible(false)}
@@ -544,6 +816,28 @@ function CreateOrderForm() {
         onClose={() => setGiftPickerVisible(false)}
         onConfirm={handleGiftPickerConfirm}
         initialSelections={giftItems.map((i) => ({ product: i.product, quantity: i.quantity }))}
+      />
+
+      <AddressPickerModal
+        open={addressPickerField === "province"}
+        onClose={() => setAddressPickerField(null)}
+        title="Chọn Tỉnh/Thành phố"
+        items={getProvinceNames()}
+        onSelect={handleProvinceSelect}
+      />
+
+      <AddressPickerModal
+        open={addressPickerField === "ward"}
+        onClose={() => setAddressPickerField(null)}
+        title="Chọn Phường/Xã/Ấp"
+        items={customerProvince ? getWardNames(customerProvince) : []}
+        onSelect={handleWardSelect}
+      />
+
+      <AutoFillModal
+        open={autoFillVisible}
+        onClose={() => setAutoFillVisible(false)}
+        onConfirm={handleAutoFill}
       />
     </div>
   );

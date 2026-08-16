@@ -59,6 +59,7 @@ export function ProductPickerModal({ open, onClose, onConfirm, initialSelections
     : products;
 
   const toggleProduct = (product: Product) => {
+    if (product.stock <= 0) return; // Don't allow adding out-of-stock products
     setDraft((prev) => {
       const next = new Map(prev);
       if (next.has(product.id)) {
@@ -78,6 +79,8 @@ export function ProductPickerModal({ open, onClose, onConfirm, initialSelections
       const newQty = entry.quantity + delta;
       if (newQty <= 0) {
         next.delete(productId);
+      } else if (newQty > entry.product.stock) {
+        return prev; // Don't exceed stock
       } else {
         next.set(productId, { ...entry, quantity: newQty });
       }
@@ -124,15 +127,16 @@ export function ProductPickerModal({ open, onClose, onConfirm, initialSelections
                 <div
                   key={product.id}
                   className={`flex items-start gap-3 px-3 py-3 rounded-lg transition-colors ${
-                    isSelected ? "bg-blue-50" : ""
+                    isSelected ? "bg-blue-50" : isOutOfStock ? "opacity-50" : ""
                   }`}
                 >
                   <button
                     onClick={() => toggleProduct(product)}
-                    className="flex items-start gap-3 flex-1 min-w-0 text-left"
+                    disabled={isOutOfStock && !isSelected}
+                    className={`flex items-start gap-3 flex-1 min-w-0 text-left ${isOutOfStock && !isSelected ? "cursor-not-allowed" : ""}`}
                   >
                     <span className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
-                      isSelected ? "bg-primary border-primary" : "border-gray-300"
+                      isSelected ? "bg-primary border-primary" : isOutOfStock ? "border-gray-200 bg-gray-100" : "border-gray-300"
                     }`}>
                       {isSelected && <span className="text-white text-xs font-bold">✓</span>}
                     </span>
@@ -184,7 +188,10 @@ export function ProductPickerModal({ open, onClose, onConfirm, initialSelections
                         </span>
                         <button
                           onClick={() => changeQuantity(product.id, 1)}
-                          className="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-50 rounded-r-lg text-sm font-bold"
+                          disabled={qty >= product.stock}
+                          className={`w-7 h-7 flex items-center justify-center rounded-r-lg text-sm font-bold ${
+                            qty >= product.stock ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:bg-gray-50"
+                          }`}
                         >
                           +
                         </button>

@@ -337,6 +337,12 @@ export default function OrderDetailPage() {
               <span className="text-muted">Địa chỉ:</span> {order.customerAddress}
             </p>
           )}
+          {(order.customerProvince || order.customerWard) && (
+            <p className="text-gray-600">
+              <span className="text-muted">Khu vực:</span>{" "}
+              {[order.customerWard, order.customerProvince].filter(Boolean).join(", ")}
+            </p>
+          )}
         </div>
 
         {/* Payment method */}
