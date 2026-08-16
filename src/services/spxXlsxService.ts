@@ -43,6 +43,7 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
     const parsed = parseVietnameseAddress(order.customerAddress);
     const province = getFullProvinceName(stored.province || parsed.province);
     const ward = stored.ward || parsed.ward;
+    const provinceWard = [province, ward].filter(Boolean).join('/');
     const items = order.items.filter((i) => !i.isGift && !i.isExchangeReturn);
 
     const productNames = items.map((item) => {
@@ -55,8 +56,8 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
       idx + 1,
       order.customerName,
       order.customerPhone,
-      province,
-      ward,
+      provinceWard,
+      '',
       order.customerAddress,
       '',
       '',
