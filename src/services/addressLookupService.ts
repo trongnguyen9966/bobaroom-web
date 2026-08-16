@@ -202,6 +202,29 @@ function matchWard(tokens: string[], wards: Ward[], usedIndices: Set<number>): s
   return null;
 }
 
+function matchWardInTokenSuffix(token: string, wards: Ward[]): string | null {
+  const norm = normalize(token);
+  const stripped = normalize(stripPrefix(token));
+
+  for (const w of wards) {
+    const wNorm = normalize(w);
+    const wStripped = normalize(stripPrefix(w));
+
+    if (wStripped.length >= 4) {
+      const suffixRegex = new RegExp(`(?:^|\\s)${wStripped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+      if (suffixRegex.test(norm) || suffixRegex.test(stripped)) {
+        return w;
+      }
+      const fullSuffixRegex = new RegExp(`(?:^|\\s)${wNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+      if (fullSuffixRegex.test(norm)) {
+        return w;
+      }
+    }
+  }
+
+  return null;
+}
+
 function matchWardGlobal(tokens: string[]): { province: Province; ward: string; tokenIndex: number } | null {
   // Pass 1: full name match (e.g. "phuong binh tan" === "phuong binh tan")
   for (let i = tokens.length - 1; i >= 0; i--) {
@@ -219,7 +242,33 @@ function matchWardGlobal(tokens: string[]): { province: Province; ward: string; 
       if (result) return { province: p, ward: result, tokenIndex: i };
     }
   }
-  return null;
+  // Pass 3: suffix match (ward name at end of token, avoids mid-string false positives)
+  // Collect all candidates and prefer province with most ward hits across all tokens
+  const candidates: { province: Province; ward: string; tokenIndex: number }[] = [];
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = tokens[i].trim();
+    for (const p of provinces) {
+      const result = matchWardInTokenSuffix(token, p.w);
+      if (result) candidates.push({ province: p, ward: result, tokenIndex: i });
+    }
+  }
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  // Count how many distinct wards from each province appear across all tokens
+  const provinceHits = new Map<number, number>();
+  const allText = tokens.map(t => normalize(t)).join(' ');
+  for (const c of candidates) {
+    let hits = 0;
+    for (const w of c.province.w) {
+      const wStripped = normalize(stripPrefix(w));
+      if (wStripped.length >= 4 && wordBoundaryMatch(allText, wStripped)) {
+        hits++;
+      }
+    }
+    provinceHits.set(c.province.c, hits);
+  }
+  candidates.sort((a, b) => (provinceHits.get(b.province.c) ?? 0) - (provinceHits.get(a.province.c) ?? 0));
+  return candidates[0];
 }
 
 export interface AddressLookupResult {
