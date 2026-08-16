@@ -22,6 +22,7 @@ export default function InventoryPage() {
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [soldCounts, setSoldCounts] = useState<Map<string, number>>(new Map());
   const [stockFilterValue, setStockFilterValue] = useState("");
+  const [soldSort, setSoldSort] = useState<"none" | "asc" | "desc">("none");
 
   useEffect(() => {
     const unsub = productService.subscribeToAll((list) => {
@@ -53,6 +54,12 @@ export default function InventoryPage() {
       );
     }
     return true;
+  });
+
+  const sorted = soldSort === "none" ? filtered : [...filtered].sort((a, b) => {
+    const aS = soldCounts.get(a.id) ?? 0;
+    const bS = soldCounts.get(b.id) ?? 0;
+    return soldSort === "asc" ? aS - bS : bS - aS;
   });
 
   const totalStock = filtered.reduce((s, p) => s + p.stock, 0);
@@ -143,6 +150,14 @@ export default function InventoryPage() {
               }`}
             />
           </div>
+          <button
+            onClick={() => setSoldSort(soldSort === "none" ? "desc" : soldSort === "desc" ? "asc" : "none")}
+            className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+              soldSort !== "none" ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            {soldSort === "none" ? "Lượt bán" : soldSort === "desc" ? "Bán cao → thấp" : "Bán thấp → cao"}
+          </button>
 
           {/* Category filter */}
           {categoryFilter ? (
@@ -173,12 +188,12 @@ export default function InventoryPage() {
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <EmptyState title="Không có sản phẩm" subtitle="Thêm sản phẩm mới để bắt đầu" />
         ) : (
           <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50 overflow-hidden">
-              {filtered.map((product) => (
+              {sorted.map((product) => (
                 <Link
                   key={product.id}
                   href={`/products/${product.id}`}
