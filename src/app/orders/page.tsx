@@ -6,6 +6,7 @@ import { OrderStatusBadge, getStatusLabel } from "@/components/ui/OrderStatusBad
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
+import { exportSPXToXlsx } from "@/services/spxXlsxService";
 import {
   DateFilter,
   OrderStatus,
@@ -91,6 +92,7 @@ export default function OrdersPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatusVisible, setBulkStatusVisible] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Pending filter state (in modal)
   const [pendingFilter, setPendingFilter] = useState<DateFilter>(DEFAULT_FILTER);
@@ -219,6 +221,19 @@ export default function OrdersPage() {
 
     await navigator.clipboard.writeText(lines.join("\n---\n"));
     alert(`Đã sao chép ${selected.length} đơn hàng`);
+  };
+
+  const handleExportXlsx = async () => {
+    if (selectedIds.size === 0 || exporting) return;
+    setExporting(true);
+    try {
+      const { count } = await exportSPXToXlsx(Array.from(selectedIds));
+      alert(`Đã tạo file Excel SPX (${count} đơn)`);
+    } catch {
+      alert("Không thể tạo file Excel");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const totalOrderCount = sections.reduce((acc, s) => acc + s.data.length, 0);
@@ -353,13 +368,20 @@ export default function OrdersPage() {
           <span className="text-sm font-semibold flex-1">{selectedIds.size} đã chọn</span>
           <button
             onClick={handleBulkCopy}
-            className="px-4 py-2.5 rounded-lg bg-gray-700 text-sm font-semibold hover:bg-gray-600 active:bg-gray-500"
+            className="px-3 py-2.5 rounded-lg bg-gray-700 text-sm font-semibold hover:bg-gray-600 active:bg-gray-500"
           >
             Sao chép
           </button>
           <button
+            onClick={handleExportXlsx}
+            disabled={exporting}
+            className="px-3 py-2.5 rounded-lg bg-green-600 text-sm font-semibold hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
+          >
+            {exporting ? "Đang tạo..." : "Excel SPX"}
+          </button>
+          <button
             onClick={() => setBulkStatusVisible(true)}
-            className="px-4 py-2.5 rounded-lg bg-primary text-sm font-semibold hover:bg-primary-hover active:bg-primary-hover"
+            className="px-3 py-2.5 rounded-lg bg-primary text-sm font-semibold hover:bg-primary-hover active:bg-primary-hover"
           >
             Đổi trạng thái
           </button>

@@ -223,6 +223,30 @@ export function lookupAddress(address: string): AddressLookupResult {
   return result;
 }
 
+export function getFullProvinceName(storedName: string): string {
+  if (!storedName) return '';
+  const p = findProvince(storedName);
+  return p ? p.fn : storedName;
+}
+
+export function parseVietnameseAddress(fullAddress: string): {
+  province: string; ward: string; detail: string;
+} {
+  const parts = fullAddress.split(',').map((p) => p.trim()).filter(Boolean);
+  let province = '';
+  let ward = '';
+
+  for (const part of parts) {
+    if (!province && /^(TP\.|Thành phố|Tỉnh)\s+/i.test(part)) {
+      province = part;
+    } else if (!ward && /^(Phường|Xã|Thị trấn|Ấp|P\.)\s+/i.test(part)) {
+      ward = part;
+    }
+  }
+
+  return { province, ward, detail: fullAddress };
+}
+
 export function getProvinceNames(): string[] {
   return provinces.map(formatProvinceName);
 }

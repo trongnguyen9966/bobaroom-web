@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ensureAuth } from "@/services/firebase";
 import { authService } from "@/services/authService";
-import { FloatingCreateButton } from "@/components/FloatingCreateButton";
 import { LoginScreen } from "@/components/LoginScreen";
 
 const NAV_ITEMS = [
@@ -84,9 +83,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-h-screen pb-16 lg:pb-0 overflow-auto">
         {children}
       </main>
-
-      {/* Floating create order button */}
-      <FloatingCreateButton />
 
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-border z-50 safe-area-bottom">
