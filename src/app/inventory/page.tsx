@@ -6,10 +6,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CategoryPickerModal } from "@/components/inventory/CategoryPickerModal";
 import { productService } from "@/services/productService";
 import { categoryService } from "@/services/categoryService";
+import { orderService } from "@/services/orderService";
 import { Product, ProductCategory } from "@/types";
 import { formatVND } from "@/utils/currency";
 
-type StockFilter = "all" | "low" | "out";
+type StockFilter = "all" | "exact" | "out";
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -19,6 +20,8 @@ export default function InventoryPage() {
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [soldCounts, setSoldCounts] = useState<Map<string, number>>(new Map());
+  const [stockFilterValue, setStockFilterValue] = useState("");
 
   useEffect(() => {
     const unsub = productService.subscribeToAll((list) => {
@@ -26,6 +29,7 @@ export default function InventoryPage() {
       setLoading(false);
     });
     const unsubCat = categoryService.subscribeToAll(setCategories);
+    orderService.getSoldCounts().then(setSoldCounts);
     return () => { unsub(); unsubCat(); };
   }, []);
 
@@ -33,7 +37,10 @@ export default function InventoryPage() {
     // Category filter
     if (categoryFilter && p.categoryId !== categoryFilter) return false;
     // Stock filter
-    if (stockFilter === "low" && p.stock > 5) return false;
+    if (stockFilter === "exact" && stockFilterValue) {
+      const target = parseInt(stockFilterValue, 10);
+      if (!isNaN(target) && p.stock !== target) return false;
+    }
     if (stockFilter === "out" && p.stock > 0) return false;
     // Search
     if (search.trim()) {
@@ -49,7 +56,7 @@ export default function InventoryPage() {
   });
 
   const totalStock = filtered.reduce((s, p) => s + p.stock, 0);
-  const lowStockCount = products.filter((p) => p.stock > 0 && p.stock <= 5).length;
+  const totalSold = Array.from(soldCounts.values()).reduce((s, v) => s + v, 0);
   const outOfStockCount = products.filter((p) => p.stock === 0).length;
   const categoryName = categoryFilter
     ? categories.find((c) => c.id === categoryFilter)?.name ?? "Danh mục"
@@ -97,24 +104,45 @@ export default function InventoryPage() {
             <p className="text-[10px] text-muted font-medium">Tổng tồn kho</p>
           </div>
           <div className="bg-amber-50 rounded-lg px-3 py-2 text-center">
-            <p className="text-lg font-bold text-amber-600">{lowStockCount}</p>
-            <p className="text-[10px] text-muted font-medium">Sắp hết</p>
+            <p className="text-lg font-bold text-amber-600">{totalSold.toLocaleString()}</p>
+            <p className="text-[10px] text-muted font-medium">Đã bán</p>
           </div>
         </div>
 
         {/* Filters */}
         <div className="flex items-center gap-2 flex-wrap">
-          {(["all", "low", "out"] as StockFilter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setStockFilter(f)}
-              className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-colors ${
-                stockFilter === f ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
+          <button
+            onClick={() => { setStockFilter("all"); setStockFilterValue(""); }}
+            className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+              stockFilter === "all" ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            Tất cả
+          </button>
+          <button
+            onClick={() => setStockFilter("out")}
+            className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+              stockFilter === "out" ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            Hết hàng ({outOfStockCount})
+          </button>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min="0"
+              placeholder="Tồn kho ="
+              value={stockFilterValue}
+              onChange={(e) => {
+                setStockFilterValue(e.target.value);
+                if (e.target.value) setStockFilter("exact");
+                else setStockFilter("all");
+              }}
+              className={`w-28 px-3 py-2.5 rounded-full text-sm font-semibold border-0 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+                stockFilter === "exact" ? "bg-primary text-white placeholder-white/60" : "bg-gray-100 text-gray-500 placeholder-gray-400"
               }`}
-            >
-              {f === "all" ? "Tất cả" : f === "low" ? `Gần hết (${lowStockCount})` : `Hết hàng (${outOfStockCount})`}
-            </button>
-          ))}
+            />
+          </div>
 
           {/* Category filter */}
           {categoryFilter ? (
@@ -192,6 +220,11 @@ export default function InventoryPage() {
                     >
                       {product.stock === 0 ? "Hết hàng" : `Tồn: ${product.stock}`}
                     </p>
+                    {(soldCounts.get(product.id) ?? 0) > 0 && (
+                      <p className="text-[10px] text-muted mt-0.5">
+                        Đã bán: {soldCounts.get(product.id)?.toLocaleString()}
+                      </p>
+                    )}
                   </div>
                 </Link>
               ))}

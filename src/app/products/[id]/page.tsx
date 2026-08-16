@@ -113,9 +113,9 @@ export default function ProductDetailPage() {
       : "Còn hàng";
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 pb-24 lg:pb-8 space-y-4">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 pb-24 lg:pb-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4">
         <button onClick={() => router.push("/inventory")} className="text-base px-3 py-2 rounded-lg text-muted hover:text-gray-700 hover:bg-gray-100 active:bg-gray-200">
           ← Quay lại
         </button>
@@ -135,118 +135,126 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Product info card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
-        <div className="flex items-start gap-4">
-          <div className="shrink-0">
-            <ImagePicker
-              imageUrl={product.imageUri}
-              uploading={uploadingImage}
-              onImageSelected={handleImageUpload}
-              onImageRemoved={handleImageRemove}
-              size="sm"
-            />
+      <div className="lg:grid lg:grid-cols-5 lg:gap-6 space-y-4 lg:space-y-0">
+        {/* Left column: product info + pricing */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Product info card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0">
+                <ImagePicker
+                  imageUrl={product.imageUri}
+                  uploading={uploadingImage}
+                  onImageSelected={handleImageUpload}
+                  onImageRemoved={handleImageRemove}
+                  size="sm"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-bold text-gray-900">{product.name}</h2>
+                <p className="text-sm text-muted mt-0.5">
+                  {[product.color, product.size].filter(Boolean).join(" | ")}
+                </p>
+                {product.sku && (
+                  <p className="text-xs text-muted-light mt-0.5">SKU: {product.sku}</p>
+                )}
+                {product.qrCode && (
+                  <p className="text-xs text-muted-light">QR: {product.qrCode}</p>
+                )}
+                {product.categoryName && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500 inline-block mt-1">
+                    {product.categoryName}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-gray-900">{product.name}</h2>
-            <p className="text-sm text-muted mt-0.5">
-              {[product.color, product.size].filter(Boolean).join(" | ")}
-            </p>
-            {product.sku && (
-              <p className="text-xs text-muted-light mt-0.5">SKU: {product.sku}</p>
+
+          {/* Pricing card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
+            <h3 className="text-sm font-bold text-gray-900 mb-3">Giá</h3>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Giá bán</span>
+              <span className="font-semibold text-primary">{formatVND(product.price)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Giá vốn</span>
+              <span className="font-semibold">{formatVND(product.costPrice)}</span>
+            </div>
+            {product.price > 0 && product.costPrice > 0 && (
+              <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+                <span className="text-muted">Lợi nhuận / sản phẩm</span>
+                <span className="font-semibold text-green-600">
+                  {formatVND(product.price - product.costPrice)}
+                </span>
+              </div>
             )}
-            {product.qrCode && (
-              <p className="text-xs text-muted-light">QR: {product.qrCode}</p>
-            )}
-            {product.categoryName && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500 inline-block mt-1">
-                {product.categoryName}
-              </span>
+            {product.stock > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Giá trị tồn kho</span>
+                <span className="font-semibold">{formatVND(product.price * product.stock)}</span>
+              </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Stock card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">Tồn kho</h3>
-          <button
-            onClick={() => setStockModalOpen(true)}
-            className="text-sm font-semibold text-primary px-4 py-2 rounded-lg hover:bg-blue-50 active:bg-blue-100"
-          >
-            + Nhập thêm
-          </button>
-        </div>
+        {/* Right column: stock + actions */}
+        <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-4 lg:self-start">
+          {/* Stock card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900">Tồn kho</h3>
+              <button
+                onClick={() => setStockModalOpen(true)}
+                className="text-sm font-semibold text-primary px-4 py-2 rounded-lg hover:bg-blue-50 active:bg-blue-100"
+              >
+                + Nhập thêm
+              </button>
+            </div>
 
-        <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-          <div>
-            <p className="text-3xl font-bold text-gray-900">{product.stock}</p>
-            <p className={`text-xs font-semibold ${stockColor} mt-0.5`}>{stockLabel}</p>
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+              <div>
+                <p className="text-3xl font-bold text-gray-900">{product.stock}</p>
+                <p className={`text-xs font-semibold ${stockColor} mt-0.5`}>{stockLabel}</p>
+              </div>
+              <div
+                className={`w-14 h-14 rounded-full flex items-center justify-center ${
+                  product.stock === 0
+                    ? "bg-red-100"
+                    : product.stock <= 5
+                    ? "bg-amber-100"
+                    : "bg-green-100"
+                }`}
+              >
+                <span className="text-2xl">
+                  {product.stock === 0 ? "⚠️" : product.stock <= 5 ? "📉" : "✅"}
+                </span>
+              </div>
+            </div>
           </div>
-          <div
-            className={`w-14 h-14 rounded-full flex items-center justify-center ${
-              product.stock === 0
-                ? "bg-red-100"
-                : product.stock <= 5
-                ? "bg-amber-100"
-                : "bg-green-100"
-            }`}
-          >
-            <span className="text-2xl">
-              {product.stock === 0 ? "⚠️" : product.stock <= 5 ? "📉" : "✅"}
-            </span>
-          </div>
-        </div>
-      </div>
 
-      {/* Pricing card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
-        <h3 className="text-sm font-bold text-gray-900 mb-3">Giá</h3>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted">Giá bán</span>
-          <span className="font-semibold text-primary">{formatVND(product.price)}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted">Giá vốn</span>
-          <span className="font-semibold">{formatVND(product.costPrice)}</span>
-        </div>
-        {product.price > 0 && product.costPrice > 0 && (
-          <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
-            <span className="text-muted">Lợi nhuận / sản phẩm</span>
-            <span className="font-semibold text-green-600">
-              {formatVND(product.price - product.costPrice)}
-            </span>
+          {/* Actions */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+            <button
+              onClick={() => setStockModalOpen(true)}
+              className="w-full py-4 rounded-xl text-base font-bold text-white bg-green-500 hover:bg-green-600 active:bg-green-700"
+            >
+              + Nhập thêm hàng
+            </button>
+            <Link
+              href={`/products/create?editId=${id}`}
+              className="block w-full py-4 rounded-xl text-base font-bold text-center text-primary bg-blue-50 hover:bg-blue-100 active:bg-blue-200"
+            >
+              Chỉnh sửa sản phẩm
+            </Link>
+            <button
+              onClick={handleDelete}
+              className="w-full py-4 rounded-xl text-base font-bold text-red-500 bg-red-50 hover:bg-red-100 active:bg-red-200"
+            >
+              Xóa sản phẩm
+            </button>
           </div>
-        )}
-        {product.stock > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Giá trị tồn kho</span>
-            <span className="font-semibold">{formatVND(product.price * product.stock)}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-        <button
-          onClick={() => setStockModalOpen(true)}
-          className="w-full py-4 rounded-xl text-base font-bold text-white bg-green-500 hover:bg-green-600 active:bg-green-700"
-        >
-          + Nhập thêm hàng
-        </button>
-        <Link
-          href={`/products/create?editId=${id}`}
-          className="block w-full py-4 rounded-xl text-base font-bold text-center text-primary bg-blue-50 hover:bg-blue-100 active:bg-blue-200"
-        >
-          Chỉnh sửa sản phẩm
-        </Link>
-        <button
-          onClick={handleDelete}
-          className="w-full py-4 rounded-xl text-base font-bold text-red-500 bg-red-50 hover:bg-red-100 active:bg-red-200"
-        >
-          Xóa sản phẩm
-        </button>
+        </div>
       </div>
 
       {/* Stock adjust modal */}

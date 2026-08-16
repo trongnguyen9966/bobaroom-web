@@ -561,4 +561,22 @@ export const orderService = {
     });
     await batch.commit();
   },
+
+  /**
+   * Count total sold quantity per product across all non-cancelled/deleted orders.
+   */
+  async getSoldCounts(): Promise<Map<string, number>> {
+    const snap = await getDocs(collection(db, ORDERS));
+    const counts = new Map<string, number>();
+    for (const d of snap.docs) {
+      const status = d.data()?.status as string;
+      if (status === 'cancelled' || status === 'deleted') continue;
+      const items: StoredItem[] = d.data()?.items ?? [];
+      for (const item of items) {
+        if (item.isExchangeReturn) continue;
+        counts.set(item.productId, (counts.get(item.productId) ?? 0) + item.quantity);
+      }
+    }
+    return counts;
+  },
 };
