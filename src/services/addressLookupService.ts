@@ -40,6 +40,11 @@ const PROVINCE_ABBREVS: Record<string, string> = {
   'thanh pho hue': 'Huế',
 };
 
+function wordBoundaryMatch(haystack: string, needle: string): boolean {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\s)${escaped}(?:\\s|$)`).test(haystack);
+}
+
 function stripPrefix(name: string): string {
   return name
     .replace(/^(Thành phố |Tỉnh |Quận |Huyện |Thị xã |Phường |Xã |Thị trấn |Tp\.\s*|TP\.\s*)/i, '')
@@ -120,7 +125,7 @@ function matchProvince(tokens: string[]): { province: Province; tokenIndex: numb
     const norm = normalize(tokens[i]);
     for (const p of provinces) {
       const pNorm = normalize(p.n);
-      if (pNorm.length >= 4 && norm.includes(pNorm)) {
+      if (pNorm.length >= 4 && wordBoundaryMatch(norm, pNorm)) {
         return { province: p, tokenIndex: i };
       }
     }
@@ -211,14 +216,6 @@ function matchWardGlobal(tokens: string[]): { province: Province; ward: string; 
     const token = tokens[i].trim();
     for (const p of provinces) {
       const result = matchWardInTokenExact(token, p.w);
-      if (result) return { province: p, ward: result, tokenIndex: i };
-    }
-  }
-  // Pass 3: fuzzy/substring matches
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    const token = tokens[i].trim();
-    for (const p of provinces) {
-      const result = matchWardInTokenFuzzy(token, p.w);
       if (result) return { province: p, ward: result, tokenIndex: i };
     }
   }
@@ -379,16 +376,6 @@ export function detectOldAddress(address: string): OldAddressWarning | null {
     for (const key of [norm, stripped]) {
       if (oldMap.has(key)) {
         const val = oldMap.get(key)!;
-        oldProvince = val.oldName;
-        const p = provinces.find(pr => pr.n === val.newName);
-        newProvince = p ? formatProvinceName(p) : val.newName;
-        break;
-      }
-    }
-    if (oldProvince) break;
-
-    for (const [mapKey, val] of oldMap.entries()) {
-      if (mapKey.length >= 6 && norm.includes(mapKey)) {
         oldProvince = val.oldName;
         const p = provinces.find(pr => pr.n === val.newName);
         newProvince = p ? formatProvinceName(p) : val.newName;
