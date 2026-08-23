@@ -37,3 +37,12 @@ body {
 .border-status-cancelled { border-left-color: #EF4444; }
 .border-status-completed { border-left-color: #059669; }
 .border-status-deleted { border-left-color: #D1D5DB; }
+
+/* Hide scrollbar for horizontal scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

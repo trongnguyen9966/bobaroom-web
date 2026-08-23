@@ -7,6 +7,8 @@ import { ensureAuth } from "@/services/firebase";
 import { authService } from "@/services/authService";
 import { LoginScreen } from "@/components/LoginScreen";
 
+const PUBLIC_ROUTES = ["/", "/login"];
+
 const NAV_ITEMS = [
   { href: "/orders", label: "Đơn hàng", icon: "📋", activeIcon: "📋" },
   { href: "/inventory", label: "Kho hàng", icon: "📦", activeIcon: "📦" },
@@ -18,9 +20,18 @@ type AppState = "loading" | "login" | "auth" | "ready";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [state, setState] = useState<AppState>("loading");
+  const isPublic = PUBLIC_ROUTES.includes(pathname);
+  const [state, setState] = useState<AppState>(isPublic ? "ready" : "loading");
+  const [firebaseReady, setFirebaseReady] = useState(false);
 
   useEffect(() => {
+    if (isPublic && !firebaseReady) {
+      ensureAuth().then(() => setFirebaseReady(true)).catch(console.error);
+    }
+  }, [isPublic, firebaseReady]);
+
+  useEffect(() => {
+    if (isPublic) return;
     if (state === "loading") {
       Promise.resolve().then(() => {
         setState(authService.isLoggedIn() ? "auth" : "login");
@@ -28,7 +39,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } else if (state === "auth") {
       ensureAuth().then(() => setState("ready")).catch(console.error);
     }
-  }, [state]);
+  }, [state, isPublic]);
+
+  if (isPublic) {
+    return <>{children}</>;
+  }
 
   if (state === "loading" || state === "auth") {
     return (

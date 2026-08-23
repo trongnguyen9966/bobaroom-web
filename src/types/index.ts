@@ -29,6 +29,7 @@ export interface Product {
   categoryName: string | null;
   qrCode: string | null;
   imageUri: string | null;
+  realImageUris: string[];
   price: number;
   costPrice: number;
   stock: number;
@@ -44,6 +45,7 @@ export interface CreateProductDTO {
   categoryId: string | null;
   qrCode: string | null;
   imageUri: string | null;
+  realImageUris?: string[];
   price: number;
   costPrice: number;
   stock: number;

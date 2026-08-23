@@ -38,6 +38,14 @@ export const imageService = {
     return getDownloadURL(storageRef);
   },
 
+  async uploadRealImage(productId: string, file: File, index: number): Promise<string> {
+    const blob = await resizeImage(file);
+    const path = `products/${productId}_real_${index}_${Date.now()}.jpg`;
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
+    return getDownloadURL(storageRef);
+  },
+
   async deleteImage(url: string): Promise<void> {
     try {
       const storageRef = ref(storage, url);

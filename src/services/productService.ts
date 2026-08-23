@@ -31,6 +31,7 @@ function mapDoc(snap: { id: string; data(): Record<string, any> | undefined }): 
     categoryName: d.categoryName ?? null,
     qrCode: d.qrCode ?? null,
     imageUri: d.imageUri ?? null,
+    realImageUris: d.realImageUris ?? [],
     price: d.price,
     costPrice: d.costPrice ?? 0,
     stock: d.stock,
@@ -77,6 +78,7 @@ export const productService = {
       categoryName: categoryName ?? null,
       qrCode: data.qrCode ?? null,
       imageUri: data.imageUri ?? null,
+      realImageUris: data.realImageUris ?? [],
       price: data.price,
       costPrice: data.costPrice ?? 0,
       stock: data.stock,
@@ -94,6 +96,7 @@ export const productService = {
       categoryName: categoryName ?? null,
       qrCode: data.qrCode ?? null,
       imageUri: data.imageUri ?? null,
+      realImageUris: data.realImageUris ?? [],
       price: data.price,
       costPrice: data.costPrice ?? 0,
       stock: data.stock,
@@ -113,6 +116,7 @@ export const productService = {
     if (data.categoryName !== undefined) updates.categoryName = data.categoryName ?? null;
     if (data.qrCode !== undefined) updates.qrCode = data.qrCode ?? null;
     if (data.imageUri !== undefined) updates.imageUri = data.imageUri ?? null;
+    if (data.realImageUris !== undefined) updates.realImageUris = data.realImageUris ?? [];
     if (data.price !== undefined) updates.price = data.price;
     if (data.costPrice !== undefined) updates.costPrice = data.costPrice;
     if (data.stock !== undefined) updates.stock = data.stock;

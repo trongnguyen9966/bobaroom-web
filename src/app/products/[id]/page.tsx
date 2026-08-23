@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StockAdjustModal } from "@/components/inventory/StockAdjustModal";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 import { Modal } from "@/components/ui/Modal";
@@ -10,6 +10,57 @@ import { productService } from "@/services/productService";
 import { imageService } from "@/services/imageService";
 import { Product } from "@/types";
 import { formatVND } from "@/utils/currency";
+
+function RealImageSlot({
+  imageUrl,
+  uploading,
+  onImageSelected,
+  onImageRemoved,
+  label,
+}: {
+  imageUrl: string | null;
+  uploading: boolean;
+  onImageSelected: (file: File) => void;
+  onImageRemoved: () => void;
+  label: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        className={`relative w-24 h-24 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center border-2 border-dashed border-gray-300 hover:border-primary transition-colors ${uploading ? "opacity-60" : ""}`}
+      >
+        {imageUrl ? (
+          <img src={imageUrl} alt={label} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-gray-400 text-lg">📷</span>
+            <span className="text-[10px] text-gray-400">{label}</span>
+          </div>
+        )}
+        {uploading && (
+          <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+      </button>
+      {imageUrl && !uploading && (
+        <div className="flex gap-1">
+          <button onClick={() => inputRef.current?.click()} className="text-[10px] font-semibold text-primary px-2 py-1 rounded hover:bg-blue-50">
+            Đổi
+          </button>
+          <button onClick={onImageRemoved} className="text-[10px] font-semibold text-red-400 px-2 py-1 rounded hover:bg-red-50">
+            Xóa
+          </button>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) onImageSelected(f); e.target.value = ""; }} className="hidden" />
+    </div>
+  );
+}
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -21,6 +72,7 @@ export default function ProductDetailPage() {
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingRealImage, setUploadingRealImage] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const data = await productService.getById(id);
@@ -73,6 +125,33 @@ export default function ProductDetailPage() {
   const handleImageRemove = async () => {
     try {
       await productService.update(id, { imageUri: null });
+      await load();
+    } catch {
+      alert("Không thể xóa ảnh");
+    }
+  };
+
+  const handleRealImageUpload = async (file: File, index: number) => {
+    setUploadingRealImage(index);
+    try {
+      const url = await imageService.uploadRealImage(id, file, index);
+      const current = product?.realImageUris ?? [];
+      const updated = [...current];
+      updated[index] = url;
+      await productService.update(id, { realImageUris: updated });
+      await load();
+    } catch {
+      alert("Không thể tải ảnh lên");
+    } finally {
+      setUploadingRealImage(null);
+    }
+  };
+
+  const handleRealImageRemove = async (index: number) => {
+    try {
+      const current = product?.realImageUris ?? [];
+      const updated = current.filter((_, i) => i !== index);
+      await productService.update(id, { realImageUris: updated });
       await load();
     } catch {
       alert("Không thể xóa ảnh");
@@ -167,6 +246,29 @@ export default function ProductDetailPage() {
                   </span>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Real images card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+            <h3 className="text-sm font-bold text-gray-900">Ảnh thực tế trên vòng</h3>
+            <p className="text-xs text-muted">Tối đa 2 ảnh thực tế để khách hàng xem trên catalog</p>
+            <div className="flex gap-3">
+              {[0, 1].map((index) => {
+                const uri = product.realImageUris?.[index];
+                const isUploading = uploadingRealImage === index;
+                return (
+                  <div key={index} className="flex flex-col items-center gap-1.5">
+                    <RealImageSlot
+                      imageUrl={uri ?? null}
+                      uploading={isUploading}
+                      onImageSelected={(file) => handleRealImageUpload(file, index)}
+                      onImageRemoved={() => handleRealImageRemove(index)}
+                      label={`Ảnh ${index + 1}`}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
 

@@ -199,17 +199,24 @@ export default function InventoryPage() {
                   href={`/products/${product.id}`}
                   className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                 >
-                  {product.imageUri ? (
-                    <img
-                      src={product.imageUri}
-                      alt={product.name}
-                      className="w-12 h-12 rounded-lg object-cover bg-gray-100 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                      <span className="text-gray-400 text-lg">📦</span>
-                    </div>
-                  )}
+                  <div className="relative shrink-0">
+                    {product.imageUri ? (
+                      <img
+                        src={product.imageUri}
+                        alt={product.name}
+                        className="w-12 h-12 rounded-lg object-cover bg-gray-100"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
+                        <span className="text-gray-400 text-lg">📦</span>
+                      </div>
+                    )}
+                    {product.realImageUris?.length > 0 && (
+                      <span className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                        {product.realImageUris.length}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{product.name}</p>
                     <p className="text-xs text-muted">

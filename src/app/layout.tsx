@@ -9,8 +9,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "BobaRoom - Quản lý đơn hàng",
-  description: "Hệ thống quản lý đơn hàng và kho hàng BobaRoom",
+  title: "Boba Room - Accessories & More",
+  description: "Lắc thép không gỉ, charm thép không gỉ - Bền bỉ theo thời gian, giá thành hợp lý",
 };
 
 export const viewport: Viewport = {
