@@ -71,7 +71,7 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
       'N',
       'Y',
       'Y',
-      30000,
+      50000,
       isCod ? 'Y' : 'N',
       isCod ? codAmount : '',
       total,
