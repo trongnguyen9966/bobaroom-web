@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import Link from "next/link";
 import { ensureAuth } from "@/services/firebase";
 import { catalogService, TopSeller } from "@/services/catalogService";
 import { Product, ProductCategory } from "@/types";
@@ -422,17 +421,9 @@ export default function CatalogPage() {
 
       {/* Footer */}
       <footer className="bg-pink-50 border-t border-pink-100">
-        <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-pink-600">boba.room</p>
-            <p className="text-xs text-pink-400">accessories & more</p>
-          </div>
-          <Link
-            href="/login"
-            className="text-xs text-pink-300 hover:text-pink-500 transition-colors"
-          >
-            Admin
-          </Link>
+        <div className="max-w-6xl mx-auto px-4 py-6 text-center">
+          <p className="text-sm font-semibold text-pink-600">boba.room</p>
+          <p className="text-xs text-pink-400">accessories & more</p>
         </div>
       </footer>
 
