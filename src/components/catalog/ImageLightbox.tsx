@@ -39,7 +39,9 @@ export function ImageLightbox({ images, alt, initialIndex = 0, onClose }: ImageL
     e.preventDefault();
     setDragging(true);
     startPos.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
   }, [scale, position]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -47,8 +49,11 @@ export function ImageLightbox({ images, alt, initialIndex = 0, onClose }: ImageL
     setPosition({ x: e.clientX - startPos.current.x, y: e.clientY - startPos.current.y });
   }, [dragging]);
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
     setDragging(false);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
   }, []);
 
   const handleDoubleClick = useCallback(() => {

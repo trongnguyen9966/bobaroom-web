@@ -16,7 +16,7 @@ function getProductImages(product: Product): string[] {
 
 const EXCLUDED_CATEGORIES = ["chặn charm", "tặng"];
 const ZALO_PHONE = "0836879035";
-const FB_PAGE_URL = "https://www.facebook.com/bobaroomdiary/";
+const FB_PAGE_URL = "https://m.me/bobaroomdiary";
 
 interface SampleItem {
   product: Product;
@@ -34,7 +34,6 @@ export default function CatalogPage() {
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [lightboxAlt, setLightboxAlt] = useState("");
-  const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +41,9 @@ export default function CatalogPage() {
   const [sampleItems, setSampleItems] = useState<SampleItem[]>([]);
   const [showSampleSheet, setShowSampleSheet] = useState(false);
   const [showSendOptions, setShowSendOptions] = useState(false);
+  const [showSendGuide, setShowSendGuide] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sendToast, setSendToast] = useState<string | null>(null);
 
   const sampleCount = useMemo(() => sampleItems.reduce((sum, i) => sum + i.quantity, 0), [sampleItems]);
 
@@ -76,7 +77,10 @@ export default function CatalogPage() {
   };
 
   const buildSampleMessage = () => {
-    const lines = sampleItems.map((i) => `- ${i.product.sku || i.product.name} x${i.quantity}`);
+    const lines = sampleItems.map((i) => {
+      const sku = i.product.sku ? `${i.product.sku} - ` : "";
+      return `- ${sku}${i.product.name} x${i.quantity}`;
+    });
     return `Em muon gui mau:\n${lines.join("\n")}\n\nGui tu boba.room catalog`;
   };
 
@@ -101,12 +105,24 @@ export default function CatalogPage() {
 
   const handleSendZalo = async () => {
     await handleCopySample();
-    window.open(`https://zalo.me/${ZALO_PHONE}`, "_blank");
+    setShowSampleSheet(false);
+    setShowSendOptions(false);
+    setSendToast("Đã copy nội dung! Dán (Ctrl+V) vào khung chat Zalo");
+    setTimeout(() => {
+      window.open(`https://zalo.me/${ZALO_PHONE}`, "_blank");
+    }, 500);
+    setTimeout(() => setSendToast(null), 5000);
   };
 
   const handleSendFacebook = async () => {
     await handleCopySample();
-    window.open(FB_PAGE_URL, "_blank");
+    setShowSampleSheet(false);
+    setShowSendOptions(false);
+    setSendToast("Đã copy nội dung! Dán (Ctrl+V) vào khung chat Facebook");
+    setTimeout(() => {
+      window.open(FB_PAGE_URL, "_blank");
+    }, 500);
+    setTimeout(() => setSendToast(null), 5000);
   };
 
   const openLightbox = (product: Product) => {
@@ -137,14 +153,6 @@ export default function CatalogPage() {
     setTopPeriod(period);
     catalogService.getTopSellers(period).then(setTopSellers);
   }, []);
-
-  useEffect(() => {
-    const handleScroll = () => setShowScrollTop(window.scrollY > 400);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   const colors = useMemo(() => {
     const colorSet = new Set<string>();
@@ -267,7 +275,7 @@ export default function CatalogPage() {
 
         <div className="p-2.5 space-y-0.5">
           <p className="text-xs font-bold text-gray-800 truncate" title={product.name}>
-            {product.sku || product.name}
+            {product.sku ? `${product.sku} - ${product.name}` : product.name}
           </p>
           {product.color && (
             <p className="text-[10px] text-pink-400">{product.color}</p>
@@ -277,7 +285,7 @@ export default function CatalogPage() {
             {!outOfStock && qty === 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); addToSample(product); }}
-                className="text-[9px] font-semibold text-pink-500 bg-pink-50 hover:bg-pink-100 px-2 py-1 rounded-full transition-colors border border-pink-200"
+                className="text-[9px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-full transition-colors border border-blue-200"
               >
                 + Chọn
               </button>
@@ -286,15 +294,15 @@ export default function CatalogPage() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={(e) => { e.stopPropagation(); updateSampleQty(product.id, -1); }}
-                  className="w-5 h-5 rounded-full bg-pink-100 text-pink-600 text-xs font-bold flex items-center justify-center hover:bg-pink-200"
+                  className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center hover:bg-blue-200"
                 >
                   -
                 </button>
-                <span className="text-xs font-bold text-pink-600 min-w-[1rem] text-center">{qty}</span>
+                <span className="text-xs font-bold text-blue-600 min-w-[1rem] text-center">{qty}</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); updateSampleQty(product.id, 1); }}
                   className={`w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
-                    qty >= product.stock ? "bg-gray-100 text-gray-400" : "bg-pink-100 text-pink-600 hover:bg-pink-200"
+                    qty >= product.stock ? "bg-gray-100 text-gray-400" : "bg-blue-100 text-blue-600 hover:bg-blue-200"
                   }`}
                   disabled={qty >= product.stock}
                 >
@@ -506,22 +514,34 @@ export default function CatalogPage() {
 
       {/* Floating buttons */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-center gap-3">
-        {showScrollTop && (
-          <button
-            onClick={scrollToTop}
-            className="w-12 h-12 rounded-full bg-pink-500 text-white shadow-lg hover:bg-pink-600 active:bg-pink-700 flex items-center justify-center transition-all"
-            aria-label="Lên đầu trang"
-          >
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="18 15 12 9 6 15" />
-            </svg>
-          </button>
-        )}
+        {/* Zalo */}
+        <a
+          href={`https://zalo.me/${ZALO_PHONE}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-11 h-11 rounded-full bg-blue-500 text-white shadow-lg hover:bg-blue-600 active:bg-blue-700 flex items-center justify-center transition-all"
+          aria-label="Chat Zalo"
+        >
+          <span className="text-xs font-bold leading-none">Zalo</span>
+        </a>
+
+        {/* Facebook */}
+        <a
+          href={FB_PAGE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-11 h-11 rounded-full bg-[#1877F2] text-white shadow-lg hover:bg-[#166FE5] active:bg-[#1565D8] flex items-center justify-center transition-all"
+          aria-label="Chat Facebook"
+        >
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.907 1.453 5.497 3.727 7.191V22l3.405-1.868A10.4 10.4 0 0012 20.486c5.523 0 10-4.145 10-9.243S17.523 2 12 2zm1.07 12.445l-2.55-2.724-4.98 2.724 5.478-5.818 2.614 2.724 4.916-2.724-5.478 5.818z" />
+          </svg>
+        </a>
 
         {sampleCount > 0 && (
           <button
             onClick={() => setShowSampleSheet(true)}
-            className="w-14 h-14 rounded-full bg-pink-500 text-white shadow-lg hover:bg-pink-600 active:bg-pink-700 flex items-center justify-center transition-all relative"
+            className="w-14 h-14 rounded-full bg-blue-500 text-white shadow-lg hover:bg-blue-600 active:bg-blue-700 flex items-center justify-center transition-all relative"
             aria-label="Xem bảng mẫu"
           >
             <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -542,7 +562,7 @@ export default function CatalogPage() {
           className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center"
           onClick={(e) => { if (e.target === e.currentTarget) { setShowSampleSheet(false); setShowSendOptions(false); } }}
         >
-          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col animate-slide-up">
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col animate-slide-up">
             {/* Sheet header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-pink-100">
               <h3 className="text-base font-bold text-gray-800">
@@ -622,14 +642,13 @@ export default function CatalogPage() {
               <div className="px-5 py-4 border-t border-pink-100 space-y-3">
                 {!showSendOptions ? (
                   <button
-                    onClick={() => setShowSendOptions(true)}
+                    onClick={() => setShowSendGuide(true)}
                     className="w-full py-3 rounded-full bg-pink-500 text-white font-semibold text-sm hover:bg-pink-600 active:bg-pink-700 transition-colors shadow-sm"
                   >
                     Gửi mẫu
                   </button>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-xs text-gray-500 text-center">Chọn cách gửi mẫu</p>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={handleSendZalo}
@@ -648,13 +667,43 @@ export default function CatalogPage() {
                       onClick={handleCopySample}
                       className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm hover:bg-gray-200 transition-colors"
                     >
-                      {copied ? "Đã copy!" : "Copy nội dung"}
+                      {copied ? "Đã copy!" : "Chỉ copy nội dung"}
                     </button>
                   </div>
                 )}
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Send guide popup */}
+      {showSendGuide && (
+        <div
+          className="fixed inset-0 z-[95] bg-black/50 flex items-center justify-center px-6"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowSendGuide(false); }}
+        >
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 animate-slide-up">
+            <h4 className="text-base font-bold text-gray-800 text-center">Hướng dẫn gửi mẫu</h4>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p><strong>Bước 1:</strong> Chọn Zalo hoặc Facebook ở bước tiếp theo.</p>
+              <p><strong>Bước 2:</strong> Nội dung mẫu sẽ được tự động copy.</p>
+              <p><strong>Bước 3:</strong> Dán (<strong>Ctrl+V</strong> hoặc nhấn giữ rồi chọn <strong>Paste</strong>) vào khung chat và gửi.</p>
+            </div>
+            <button
+              onClick={() => { setShowSendGuide(false); setShowSendOptions(true); }}
+              className="w-full py-3 rounded-full bg-pink-500 text-white font-semibold text-sm hover:bg-pink-600 active:bg-pink-700 transition-colors"
+            >
+              Đã đọc
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Send toast notification */}
+      {sendToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] bg-gray-900 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium max-w-sm text-center animate-slide-down">
+          {sendToast}
         </div>
       )}
 
