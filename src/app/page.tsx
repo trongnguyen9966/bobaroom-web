@@ -15,6 +15,13 @@ function getProductImages(product: Product): string[] {
 }
 
 const EXCLUDED_CATEGORIES = ["chặn charm", "tặng"];
+const ZALO_PHONE = "0836879035";
+const FB_PAGE_URL = "https://www.facebook.com/bobaroomdiary/";
+
+interface SampleItem {
+  product: Product;
+  quantity: number;
+}
 
 export default function CatalogPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -30,6 +37,77 @@ export default function CatalogPage() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
+
+  // Sample selection state
+  const [sampleItems, setSampleItems] = useState<SampleItem[]>([]);
+  const [showSampleSheet, setShowSampleSheet] = useState(false);
+  const [showSendOptions, setShowSendOptions] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const sampleCount = useMemo(() => sampleItems.reduce((sum, i) => sum + i.quantity, 0), [sampleItems]);
+
+  const addToSample = (product: Product) => {
+    setSampleItems((prev) => {
+      const existing = prev.find((i) => i.product.id === product.id);
+      if (existing) {
+        if (existing.quantity >= product.stock) return prev;
+        return prev.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+  };
+
+  const updateSampleQty = (productId: string, delta: number) => {
+    setSampleItems((prev) => {
+      return prev
+        .map((i) => {
+          if (i.product.id !== productId) return i;
+          const next = i.quantity + delta;
+          if (next <= 0) return null;
+          if (next > i.product.stock) return i;
+          return { ...i, quantity: next };
+        })
+        .filter(Boolean) as SampleItem[];
+    });
+  };
+
+  const removeSampleItem = (productId: string) => {
+    setSampleItems((prev) => prev.filter((i) => i.product.id !== productId));
+  };
+
+  const buildSampleMessage = () => {
+    const lines = sampleItems.map((i) => `- ${i.product.sku || i.product.name} x${i.quantity}`);
+    return `Em muon gui mau:\n${lines.join("\n")}\n\nGui tu boba.room catalog`;
+  };
+
+  const handleCopySample = async () => {
+    const msg = buildSampleMessage();
+    try {
+      await navigator.clipboard.writeText(msg);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const ta = document.createElement("textarea");
+      ta.value = msg;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleSendZalo = async () => {
+    await handleCopySample();
+    window.open(`https://zalo.me/${ZALO_PHONE}`, "_blank");
+  };
+
+  const handleSendFacebook = async () => {
+    await handleCopySample();
+    window.open(FB_PAGE_URL, "_blank");
+  };
 
   const openLightbox = (product: Product) => {
     const imgs = getProductImages(product);
@@ -98,14 +176,12 @@ export default function CatalogPage() {
     });
   }, [products, selectedCategory, selectedColor, search]);
 
-  // Sort: in-stock first, then by createdAt desc (newest first)
   const sortedProducts = useMemo(() => {
     const inStock = filtered.filter((p) => p.stock > 0);
     const outOfStock = filtered.filter((p) => p.stock === 0);
     return [...inStock, ...outOfStock];
   }, [filtered]);
 
-  // Top sellers: exclude "Chặn charm" / "Tặng" categories
   const topSellerProducts = useMemo(() => {
     return topSellers
       .map((t) => products.find((p) => p.id === t.productId))
@@ -123,6 +199,11 @@ export default function CatalogPage() {
 
   const isFiltering = !!(search || selectedCategory || selectedColor);
 
+  const getSampleQty = (productId: string) => {
+    const item = sampleItems.find((i) => i.product.id === productId);
+    return item?.quantity ?? 0;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FFF8F5] flex items-center justify-center">
@@ -134,20 +215,111 @@ export default function CatalogPage() {
     );
   }
 
+  const renderProductCard = (product: Product, opts?: { topIdx?: number; showAddBtn?: boolean }) => {
+    const outOfStock = product.stock === 0;
+    const topRank = opts?.topIdx != null ? opts.topIdx : topSellerMap.get(product.id);
+    const hasRealImages = product.realImageUris?.length > 0;
+    const qty = getSampleQty(product.id);
+
+    return (
+      <div
+        key={product.id}
+        className={`relative bg-white rounded-xl border overflow-hidden transition-shadow ${
+          outOfStock
+            ? "border-gray-200 opacity-60"
+            : "border-pink-100 shadow-sm hover:shadow-md"
+        }`}
+      >
+        {outOfStock && (
+          <div className="absolute top-2 right-2 z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+            Hết hàng
+          </div>
+        )}
+
+        {topRank && !outOfStock && (
+          <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+            TOP {topRank}
+          </div>
+        )}
+
+        {hasRealImages && !outOfStock && (
+          <div className="absolute bottom-[calc(50%+8px)] right-2 z-10 bg-white/80 backdrop-blur text-[10px] font-bold text-pink-500 px-1.5 py-0.5 rounded-full">
+            +{product.realImageUris.length} ảnh
+          </div>
+        )}
+
+        <button
+          onClick={() => openLightbox(product)}
+          className="w-full aspect-square bg-pink-50/50 flex items-center justify-center overflow-hidden"
+          disabled={!product.imageUri && !hasRealImages}
+        >
+          {product.imageUri ? (
+            <img
+              src={product.imageUri}
+              alt={product.name}
+              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+            />
+          ) : (
+            <span className="text-3xl text-pink-200">📦</span>
+          )}
+        </button>
+
+        <div className="p-2.5 space-y-0.5">
+          <p className="text-xs font-bold text-gray-800 truncate" title={product.name}>
+            {product.sku || product.name}
+          </p>
+          {product.color && (
+            <p className="text-[10px] text-pink-400">{product.color}</p>
+          )}
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
+            {!outOfStock && qty === 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); addToSample(product); }}
+                className="text-[9px] font-semibold text-pink-500 bg-pink-50 hover:bg-pink-100 px-2 py-1 rounded-full transition-colors border border-pink-200"
+              >
+                + Chọn
+              </button>
+            )}
+            {qty > 0 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); updateSampleQty(product.id, -1); }}
+                  className="w-5 h-5 rounded-full bg-pink-100 text-pink-600 text-xs font-bold flex items-center justify-center hover:bg-pink-200"
+                >
+                  -
+                </button>
+                <span className="text-xs font-bold text-pink-600 min-w-[1rem] text-center">{qty}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); updateSampleQty(product.id, 1); }}
+                  className={`w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
+                    qty >= product.stock ? "bg-gray-100 text-gray-400" : "bg-pink-100 text-pink-600 hover:bg-pink-200"
+                  }`}
+                  disabled={qty >= product.stock}
+                >
+                  +
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div ref={scrollRef} className="min-h-screen bg-[#FFF8F5]">
       {/* Header */}
       <header className="bg-gradient-to-r from-pink-100 via-pink-50 to-amber-50 border-b border-pink-100">
         <div className="max-w-6xl mx-auto px-4 py-5 sm:py-6">
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Logo */}
             <img
               src="/logo.png"
               alt="Boba Room"
               className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 object-contain rounded-full bg-white"
             />
 
-            {/* Badge "Lắc charm titan" */}
             <div className="shrink-0 bg-[#FFF5F0] border border-pink-100 rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 text-center relative">
               <span className="text-pink-300 text-[10px] absolute top-1 left-2">✦</span>
               <span className="text-pink-300 text-[10px] absolute top-1 right-2">✦</span>
@@ -157,7 +329,6 @@ export default function CatalogPage() {
               <p className="text-sm sm:text-base font-extrabold text-amber-900 leading-tight">titan</p>
             </div>
 
-            {/* Product highlights */}
             <div className="flex-1 min-w-0 bg-[#FFF5F0] rounded-xl px-4 py-3 border border-pink-100 relative">
               <span className="text-pink-300 text-[10px] absolute top-1 left-2">✦</span>
               <span className="text-pink-300 text-[10px] absolute top-1 right-2">✦</span>
@@ -284,40 +455,12 @@ export default function CatalogPage() {
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {topSellerProducts.map((product, idx) => (
-                <div
-                  key={product.id}
-                  className="relative bg-white rounded-xl border border-pink-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <div className="absolute top-2 left-2 z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    TOP {idx + 1}
-                  </div>
-                  <button
-                    onClick={() => openLightbox(product)}
-                    className="w-full aspect-square bg-pink-50 flex items-center justify-center overflow-hidden"
-                  >
-                    {product.imageUri ? (
-                      <img src={product.imageUri} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-3xl text-pink-200">📦</span>
-                    )}
-                  </button>
-                  <div className="p-2.5">
-                    <p className="text-xs font-bold text-gray-800 truncate">{product.sku || product.name}</p>
-                    <p className="text-sm font-bold text-pink-600 mt-0.5">{formatVND(product.price)}</p>
-                  </div>
-                  {product.realImageUris?.length > 0 && (
-                    <div className="absolute top-2 right-2 z-10 bg-white/80 backdrop-blur text-[10px] font-bold text-pink-500 px-1.5 py-0.5 rounded-full">
-                      +{product.realImageUris.length} ảnh
-                    </div>
-                  )}
-                </div>
-              ))}
+              {topSellerProducts.map((product, idx) => renderProductCard(product, { topIdx: idx + 1 }))}
             </div>
           </section>
         )}
 
-        {/* Product Grid — grouped by SKU prefix */}
+        {/* Product Grid */}
         <section>
           {isFiltering && (
             <p className="text-sm text-pink-400 mb-3">
@@ -334,73 +477,7 @@ export default function CatalogPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {sortedProducts.map((product) => {
-                const outOfStock = product.stock === 0;
-                const topRank = topSellerMap.get(product.id);
-                const hasRealImages = product.realImageUris?.length > 0;
-                return (
-                  <div
-                    key={product.id}
-                    className={`relative bg-white rounded-xl border overflow-hidden transition-shadow ${
-                      outOfStock
-                        ? "border-gray-200 opacity-60"
-                        : "border-pink-100 shadow-sm hover:shadow-md"
-                    }`}
-                  >
-                    {outOfStock && (
-                      <div className="absolute top-2 right-2 z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        Hết hàng
-                      </div>
-                    )}
-
-                    {topRank && !outOfStock && (
-                      <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        TOP {topRank}
-                      </div>
-                    )}
-
-                    {hasRealImages && !outOfStock && (
-                      <div className="absolute bottom-[calc(50%+8px)] right-2 z-10 bg-white/80 backdrop-blur text-[10px] font-bold text-pink-500 px-1.5 py-0.5 rounded-full">
-                        +{product.realImageUris.length} ảnh
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => openLightbox(product)}
-                      className="w-full aspect-square bg-pink-50/50 flex items-center justify-center overflow-hidden"
-                      disabled={!product.imageUri && !hasRealImages}
-                    >
-                      {product.imageUri ? (
-                        <img
-                          src={product.imageUri}
-                          alt={product.name}
-                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="text-3xl text-pink-200">📦</span>
-                      )}
-                    </button>
-
-                    <div className="p-2.5 space-y-0.5">
-                      <p className="text-xs font-bold text-gray-800 truncate" title={product.name}>
-                        {product.sku || product.name}
-                      </p>
-                      {product.color && (
-                        <p className="text-[10px] text-pink-400">{product.color}</p>
-                      )}
-                      <div className="flex items-center justify-between pt-1">
-                        <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
-                        {!outOfStock && (
-                          <span className="text-[9px] font-semibold text-green-500 bg-green-50 px-1.5 py-0.5 rounded-full">
-                            Còn hàng
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {sortedProducts.map((product) => renderProductCard(product))}
             </div>
           )}
         </section>
@@ -421,23 +498,164 @@ export default function CatalogPage() {
 
       {/* Footer */}
       <footer className="bg-pink-50 border-t border-pink-100">
-        <div className="max-w-6xl mx-auto px-4 py-6 text-center">
+        <div className="max-w-6xl mx-auto px-4 py-6 text-center space-y-1">
           <p className="text-sm font-semibold text-pink-600">boba.room</p>
           <p className="text-xs text-pink-400">accessories & more</p>
         </div>
       </footer>
 
-      {/* Scroll to top */}
-      {showScrollTop && (
-        <button
-          onClick={scrollToTop}
-          className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-pink-500 text-white shadow-lg hover:bg-pink-600 active:bg-pink-700 flex items-center justify-center transition-all"
-          aria-label="Lên đầu trang"
+      {/* Floating buttons */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-center gap-3">
+        {showScrollTop && (
+          <button
+            onClick={scrollToTop}
+            className="w-12 h-12 rounded-full bg-pink-500 text-white shadow-lg hover:bg-pink-600 active:bg-pink-700 flex items-center justify-center transition-all"
+            aria-label="Lên đầu trang"
+          >
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </button>
+        )}
+
+        {sampleCount > 0 && (
+          <button
+            onClick={() => setShowSampleSheet(true)}
+            className="w-14 h-14 rounded-full bg-pink-500 text-white shadow-lg hover:bg-pink-600 active:bg-pink-700 flex items-center justify-center transition-all relative"
+            aria-label="Xem bảng mẫu"
+          >
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 01-8 0" />
+            </svg>
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full flex items-center justify-center px-1">
+              {sampleCount}
+            </span>
+          </button>
+        )}
+      </div>
+
+      {/* Sample Sheet (Bottom Sheet) */}
+      {showSampleSheet && (
+        <div
+          className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowSampleSheet(false); setShowSendOptions(false); } }}
         >
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="18 15 12 9 6 15" />
-          </svg>
-        </button>
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col animate-slide-up">
+            {/* Sheet header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-pink-100">
+              <h3 className="text-base font-bold text-gray-800">
+                Mẫu đã chọn ({sampleCount})
+              </h3>
+              <button
+                onClick={() => { setShowSampleSheet(false); setShowSendOptions(false); }}
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-200 text-lg"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Sheet body */}
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+              {sampleItems.map((item) => (
+                <div key={item.product.id} className="flex items-center gap-3 bg-pink-50/50 rounded-xl p-3">
+                  {/* Product image */}
+                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-pink-100 shrink-0">
+                    {item.product.imageUri ? (
+                      <img src={item.product.imageUri} alt={item.product.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-pink-300 text-lg">📦</div>
+                    )}
+                  </div>
+
+                  {/* Product info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">
+                      {item.product.sku || item.product.name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">{item.product.name}</p>
+                    {item.product.color && (
+                      <p className="text-[10px] text-pink-400">{item.product.color}</p>
+                    )}
+                  </div>
+
+                  {/* Quantity controls */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => updateSampleQty(item.product.id, -1)}
+                      className="w-7 h-7 rounded-full bg-pink-100 text-pink-600 text-sm font-bold flex items-center justify-center hover:bg-pink-200"
+                    >
+                      -
+                    </button>
+                    <span className="text-sm font-bold text-gray-800 min-w-[1.5rem] text-center">{item.quantity}</span>
+                    <button
+                      onClick={() => updateSampleQty(item.product.id, 1)}
+                      className={`w-7 h-7 rounded-full text-sm font-bold flex items-center justify-center ${
+                        item.quantity >= item.product.stock
+                          ? "bg-gray-100 text-gray-400"
+                          : "bg-pink-100 text-pink-600 hover:bg-pink-200"
+                      }`}
+                      disabled={item.quantity >= item.product.stock}
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => removeSampleItem(item.product.id)}
+                      className="w-7 h-7 rounded-full bg-red-50 text-red-400 text-sm flex items-center justify-center hover:bg-red-100 ml-1"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {sampleItems.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-pink-300 text-sm">Chưa chọn mẫu nào</p>
+                </div>
+              )}
+            </div>
+
+            {/* Sheet footer */}
+            {sampleItems.length > 0 && (
+              <div className="px-5 py-4 border-t border-pink-100 space-y-3">
+                {!showSendOptions ? (
+                  <button
+                    onClick={() => setShowSendOptions(true)}
+                    className="w-full py-3 rounded-full bg-pink-500 text-white font-semibold text-sm hover:bg-pink-600 active:bg-pink-700 transition-colors shadow-sm"
+                  >
+                    Gửi mẫu
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 text-center">Chọn cách gửi mẫu</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={handleSendZalo}
+                        className="py-3 rounded-xl bg-blue-500 text-white font-semibold text-sm hover:bg-blue-600 active:bg-blue-700 transition-colors"
+                      >
+                        Zalo
+                      </button>
+                      <button
+                        onClick={handleSendFacebook}
+                        className="py-3 rounded-xl bg-[#1877F2] text-white font-semibold text-sm hover:bg-[#166FE5] active:bg-[#1565D8] transition-colors"
+                      >
+                        Facebook
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleCopySample}
+                      className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm hover:bg-gray-200 transition-colors"
+                    >
+                      {copied ? "Đã copy!" : "Copy nội dung"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Product lightbox */}
