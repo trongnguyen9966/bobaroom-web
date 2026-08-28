@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { OrderStatusBadge } from "@/components/ui/OrderStatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
@@ -76,12 +76,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [deductionsExpanded, setDeductionsExpanded] = useState(false);
   const [netExpanded, setNetExpanded] = useState(false);
+  const statsVersionRef = useRef(0);
 
   useEffect(() => {
     orderService.checkAndCompleteShipped().catch(() => {});
 
     const [startMs, endMs] = getDateRange(filter);
     const statuses = statusFilter === "all" ? undefined : [statusFilter];
+    const version = ++statsVersionRef.current;
 
     const unsubscribe = orderService.subscribeToFiltered(
       { startMs, endMs },
@@ -95,8 +97,9 @@ export default function DashboardPage() {
           : orders;
         setSections(groupByDate(filtered));
 
-        // computeStats is async — only hide loading after stats are ready
+        // computeStats is async — only apply if this is still the current version
         revenueService.computeStats(orders).then((computedStats) => {
+          if (version !== statsVersionRef.current) return;
           setStats(computedStats);
           setLoading(false);
         });
