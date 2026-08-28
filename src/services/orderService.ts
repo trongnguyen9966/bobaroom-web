@@ -291,6 +291,7 @@ export const orderService = {
         productSize: item.productSize ?? prev?.productSize ?? '',
         productImageUri: item.productImageUri ?? prev?.productImageUri ?? null,
         costPrice: item.costPrice ?? prev?.costPrice ?? 0,
+        isExchangeReturn: prev?.isExchangeReturn ?? false,
       };
     });
 
@@ -578,5 +579,138 @@ export const orderService = {
       }
     }
     return counts;
+  },
+
+  /**
+   * Create a separate exchange order from main order.
+   * oldItems = items removed from main order (marked isExchangeReturn: true).
+   * newItems = replacement products going out to customer.
+   */
+  async createExchangeOrder(
+    mainOrderId: string,
+    mainOrder: { customerName: string; customerPhone: string; customerAddress: string; notes: string; paymentMethod: string | null },
+    oldItems: { id: string; productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number }[],
+    newItems: { productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number }[],
+    exchangeCost: number,
+    priceDiff: number,
+  ): Promise<string> {
+    const id = generateId();
+    const now = Date.now();
+
+    const storedItems: StoredItem[] = [
+      ...oldItems.map((i) => ({
+        id: generateId(),
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        originalUnitPrice: i.unitPrice,
+        isGift: false,
+        createdAt: now,
+        productName: i.productName,
+        productSku: i.productSku ?? '',
+        productColor: i.productColor,
+        productSize: i.productSize,
+        productImageUri: i.productImageUri,
+        costPrice: i.costPrice,
+        isExchangeReturn: true,
+      })),
+      ...newItems.map((ni) => ({
+        id: generateId(),
+        productId: ni.productId,
+        quantity: ni.quantity,
+        unitPrice: ni.unitPrice,
+        originalUnitPrice: ni.unitPrice,
+        isGift: false,
+        createdAt: now,
+        productName: ni.productName,
+        productSku: ni.productSku ?? '',
+        productColor: ni.productColor,
+        productSize: ni.productSize,
+        productImageUri: ni.productImageUri,
+        costPrice: ni.costPrice,
+        isExchangeReturn: false,
+      })),
+    ];
+
+    const chiPhiBaoKhach = priceDiff + exchangeCost;
+
+    await setDoc(doc(db, ORDERS, id), {
+      orderCode: null,
+      customerName: mainOrder.customerName + ' (Đổi hàng)',
+      customerPhone: mainOrder.customerPhone,
+      customerAddress: mainOrder.customerAddress,
+      notes: mainOrder.notes,
+      status: 'confirmed',
+      paymentMethod: mainOrder.paymentMethod,
+      discountType: 'fixed',
+      discountValue: 0,
+      shippingFee: 0,
+      operatingCost: 0,
+      orderType: 'normal',
+      platformFeeType: 'percent',
+      platformFeeValue: 0,
+      createdAt: now,
+      updatedAt: now,
+      confirmedAt: now,
+      shippedAt: null,
+      lockedTotal: chiPhiBaoKhach,
+      lockedShippingCost: null,
+      exchangeFromOrderId: mainOrderId,
+      exchangeCost,
+      exchangePriceDiff: priceDiff,
+      isWaiting: false,
+      editingBy: null,
+      deposit: 0,
+      items: storedItems,
+    });
+
+    await updateDoc(doc(db, ORDERS, mainOrderId), { exchangeOrderId: id, updatedAt: now });
+
+    return id;
+  },
+
+  /**
+   * Remove specific items from an order (used when exchange is confirmed).
+   */
+  async removeItemsFromOrder(orderId: string, itemIds: string[]): Promise<void> {
+    const ref = doc(db, ORDERS, orderId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const items: StoredItem[] = snap.data()?.items ?? [];
+      const remaining = items.filter((i) => !itemIds.includes(i.id));
+      tx.update(ref, { items: remaining, updatedAt: Date.now() });
+    });
+  },
+
+  /**
+   * Cancel an exchange order and restore the old items back to the original order.
+   */
+  async cancelExchange(exchangeOrderId: string): Promise<void> {
+    const exchangeSnap = await getDoc(doc(db, ORDERS, exchangeOrderId));
+    if (!exchangeSnap.exists()) return;
+
+    const mainOrderId: string = exchangeSnap.data()?.exchangeFromOrderId;
+    if (!mainOrderId) return;
+
+    const storedItems: StoredItem[] = exchangeSnap.data()?.items ?? [];
+    const returnedItems = storedItems.filter((i) => i.isExchangeReturn);
+
+    const mainRef = doc(db, ORDERS, mainOrderId);
+    const exchangeRef = doc(db, ORDERS, exchangeOrderId);
+    const now = Date.now();
+
+    await runTransaction(db, async (tx) => {
+      const mainSnap = await tx.get(mainRef);
+      const existingItems: StoredItem[] = mainSnap.data()?.items ?? [];
+
+      const restoredItems = returnedItems.map((i) => ({
+        ...i,
+        id: generateId(),
+        isExchangeReturn: false,
+      }));
+
+      tx.update(mainRef, { items: [...existingItems, ...restoredItems], exchangeOrderId: null, updatedAt: now });
+      tx.update(exchangeRef, { status: 'cancelled', updatedAt: now });
+    });
   },
 };

@@ -8,7 +8,8 @@ import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
 import { inventoryService } from "@/services/inventoryService";
 import { settingsService } from "@/services/settingsService";
-import { OrderStatus, OrderWithItems, PaymentMethod } from "@/types";
+import { productService } from "@/services/productService";
+import { AppSettings, OrderItem, OrderStatus, OrderWithItems, PaymentMethod, Product } from "@/types";
 import { formatVND } from "@/utils/currency";
 import { formatDateTime } from "@/utils/date";
 import { generateOrderImage } from "@/utils/orderImage";
@@ -64,6 +65,15 @@ function formatOrderText(order: OrderWithItems): string {
   return lines.join("\n");
 }
 
+function parseNumber(s: string): number {
+  return parseInt(s.replace(/[^\d]/g, ''), 10) || 0;
+}
+
+function formatInputNumber(s: string): string {
+  const n = parseNumber(s);
+  return n > 0 ? n.toLocaleString('vi-VN') : s;
+}
+
 export default function OrderDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -77,6 +87,21 @@ export default function OrderDetailPage() {
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
 
+  // Exchange flow states
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [exchangeStep, setExchangeStep] = useState<0 | 1 | 2 | 3>(0);
+  const [exchangeOldItems, setExchangeOldItems] = useState<Set<string>>(new Set());
+  const [exchangeNewProducts, setExchangeNewProducts] = useState<Product[]>([]);
+  const [exchangeCostInput, setExchangeCostInput] = useState('');
+  const [exchangeCreating, setExchangeCreating] = useState(false);
+  const [capturedOldItemsTotal, setCapturedOldItemsTotal] = useState(0);
+  const [capturedOldItemsData, setCapturedOldItemsData] = useState<OrderItem[]>([]);
+  const [exchangeableItemIds, setExchangeableItemIds] = useState<Set<string>>(new Set());
+  // Product picker for exchange step 2
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [productsLoading, setProductsLoading] = useState(false);
+
   const load = useCallback(async () => {
     const data = await orderService.getById(id);
     setOrder(data);
@@ -87,13 +112,38 @@ export default function OrderDetailPage() {
     load();
   }, [load]);
 
-  // Also subscribe for realtime updates
   useEffect(() => {
     const unsub = orderService.subscribeToOrder(id, (updated) => {
       if (updated) setOrder(updated);
     });
     return () => unsub();
   }, [id]);
+
+  // Load settings for exchange
+  useEffect(() => {
+    settingsService.get().then(setAppSettings);
+  }, []);
+
+  // Load exchangeable item IDs
+  const canExchange = !!(appSettings?.exchangeEnabled &&
+    order &&
+    ['shipped', 'completed'].includes(order.status) &&
+    appSettings.exchangeCategoryIds.length > 0);
+
+  useEffect(() => {
+    if (!canExchange || !order) return;
+    const loadCategories = async () => {
+      const ids = new Set<string>();
+      for (const item of order.items) {
+        const product = await productService.getById(item.productId);
+        if (product?.categoryId && appSettings!.exchangeCategoryIds.includes(product.categoryId)) {
+          ids.add(item.id);
+        }
+      }
+      setExchangeableItemIds(ids);
+    };
+    loadCategories();
+  }, [canExchange, order?.items.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdvanceStatus = async () => {
     if (!order) return;
@@ -123,12 +173,10 @@ export default function OrderDetailPage() {
     setPaymentConfirmOpen(false);
     setActionLoading(true);
     try {
-      // 1. Deduct stock
       const orderItems = await orderService.getItems(id);
       const { success, outOfStockProductIds } = await inventoryService.deductStock(orderItems);
 
       if (!success) {
-        // Remove out-of-stock items from the order
         const removedIds = await inventoryService.removeOutOfStockItems(id);
         const updatedItems = orderItems.filter((i) => !removedIds.includes(i.id));
 
@@ -137,7 +185,6 @@ export default function OrderDetailPage() {
           setActionLoading(false);
           return;
         }
-        // Deduct stock for remaining items
         await inventoryService.deductStock(updatedItems);
         const removedNames = order.items
           .filter((i) => outOfStockProductIds.includes(i.productId))
@@ -146,7 +193,6 @@ export default function OrderDetailPage() {
         alert(`Đã xác nhận. Một số sản phẩm hết hàng đã bị xóa: ${removedNames}`);
       }
 
-      // 2. Check free shipping
       const settings = await settingsService.get();
       if (settings.freeShippingEnabled) {
         const subtotalAfterDiscount = order.subtotal - order.discountAmount;
@@ -159,32 +205,23 @@ export default function OrderDetailPage() {
         }
       }
 
-      // 3. Update status
       const now = Date.now();
       await orderService.updateStatus(id, "confirmed", {
         paymentMethod: method,
         confirmedAt: now,
       });
 
-      // 4. Cleanup draft orders with 0-stock products
       const deductedItems = order.items
         .filter((i) => !i.isGift)
         .map((i) => ({ productId: i.productId, productName: i.productName }));
       await inventoryService.cleanupDraftOrdersForProducts(id, deductedItems);
 
-      // 5. Backdate createdAt if confirmed on different day
       const creationDay = new Date(order.createdAt).toDateString();
       const confirmDay = new Date(now).toDateString();
       if (creationDay !== confirmDay) {
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
         await orderService.updateCreatedAt(id, startOfToday.getTime());
-      }
-
-      // 6. Check waiting order
-      if (settings.waitingOrderEnabled && settings.waitingOrderCategoryIds.length > 0) {
-        // Note: OrderItem doesn't have categoryId, skip waiting check on web
-        // (matching mobile which loads products to check categories)
       }
 
       await load();
@@ -200,7 +237,6 @@ export default function OrderDetailPage() {
     if (!confirm("Bạn có chắc muốn hủy đơn hàng này?")) return;
     setActionLoading(true);
     try {
-      // Restore stock if order was confirmed+
       if (["confirmed", "preparing", "packed", "shipped"].includes(order.status)) {
         await inventoryService.restoreStock(order.items);
       }
@@ -261,10 +297,8 @@ export default function OrderDetailPage() {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
       if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
-        // Mobile/iPad: share sheet -> user can "Save to Photos"
         await navigator.share({ files: [file] });
       } else if ("showSaveFilePicker" in window) {
-        // Desktop with File System Access API: let user pick folder
         try {
           const handle = await (window as any).showSaveFilePicker({
             suggestedName: fileName,
@@ -280,7 +314,6 @@ export default function OrderDetailPage() {
           throw err;
         }
       } else {
-        // Fallback: download
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -304,6 +337,130 @@ export default function OrderDetailPage() {
       return;
     }
     router.push(`/orders/create?editId=${id}`);
+  };
+
+  // === Exchange handlers ===
+  const startExchange = () => {
+    setMenuOpen(false);
+    setExchangeOldItems(new Set());
+    setExchangeNewProducts([]);
+    setExchangeCostInput('');
+    setCapturedOldItemsTotal(0);
+    setCapturedOldItemsData([]);
+    setExchangeStep(1);
+  };
+
+  const toggleExchangeItem = (itemId: string) => {
+    setExchangeOldItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const handleExchangeStep1Confirm = () => {
+    if (exchangeOldItems.size === 0 || !order) return;
+    const selectedItems = order.items.filter((i) => exchangeOldItems.has(i.id));
+    setCapturedOldItemsTotal(selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0));
+    setCapturedOldItemsData(selectedItems);
+    // Load products for step 2
+    setProductsLoading(true);
+    productService.getAll().then((products) => {
+      if (appSettings?.exchangeCategoryIds.length) {
+        setAllProducts(products.filter((p) => p.categoryId && appSettings.exchangeCategoryIds.includes(p.categoryId)));
+      } else {
+        setAllProducts(products);
+      }
+      setProductsLoading(false);
+    });
+    setExchangeStep(2);
+  };
+
+  const toggleNewProduct = (product: Product) => {
+    setExchangeNewProducts((prev) => {
+      const exists = prev.find((p) => p.id === product.id);
+      if (exists) return prev.filter((p) => p.id !== product.id);
+      return [...prev, product];
+    });
+  };
+
+  const newItemsTotal = exchangeNewProducts.reduce((s, p) => s + p.price, 0);
+  const priceDiff = newItemsTotal - capturedOldItemsTotal;
+
+  const handleExchangeConfirm = async () => {
+    if (!order || exchangeNewProducts.length === 0 || capturedOldItemsData.length === 0) return;
+    setExchangeCreating(true);
+    try {
+      // 1. Remove old items from main order
+      await orderService.removeItemsFromOrder(order.id, [...exchangeOldItems]);
+
+      // 2. Create exchange order
+      const exchangeCost = parseNumber(exchangeCostInput);
+      const exchangeOrderId = await orderService.createExchangeOrder(
+        order.id,
+        { customerName: order.customerName, customerPhone: order.customerPhone, customerAddress: order.customerAddress, notes: order.notes, paymentMethod: order.paymentMethod },
+        capturedOldItemsData.map((i) => ({ id: i.id, productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, productName: i.productName, productColor: i.productColor, productSize: i.productSize, productImageUri: i.productImageUri, costPrice: i.costPrice })),
+        exchangeNewProducts.map((p) => ({ productId: p.id, quantity: 1, unitPrice: p.price, productName: p.name, productColor: p.color, productSize: p.size, productImageUri: p.imageUri, costPrice: p.costPrice })),
+        exchangeCost,
+        priceDiff,
+      );
+
+      // 3. Deduct stock for new items
+      const newOrderItems = exchangeNewProducts.map((p) => ({
+        id: '', orderId: exchangeOrderId, productId: p.id, quantity: 1,
+        unitPrice: p.price, originalUnitPrice: p.price, isGift: false,
+        createdAt: Date.now(), productName: p.name, productSku: p.sku,
+        productColor: p.color, productSize: p.size, productImageUri: p.imageUri,
+        currentStock: 0, costPrice: p.costPrice, isExchangeReturn: false,
+      }));
+      await inventoryService.deductStock(newOrderItems);
+
+      setExchangeStep(0);
+      alert("Đã tạo đơn đổi hàng thành công!");
+      router.push(`/orders/${exchangeOrderId}`);
+    } catch {
+      alert("Không thể tạo đơn đổi hàng");
+    } finally {
+      setExchangeCreating(false);
+    }
+  };
+
+  const handleExchangeReceived = async () => {
+    if (!order) return;
+    if (!confirm("Xác nhận đã nhận hàng đổi từ khách?")) return;
+    setActionLoading(true);
+    try {
+      const returnedItems = order.items.filter((i) => i.isExchangeReturn);
+      if (returnedItems.length > 0) {
+        await inventoryService.restoreStock(returnedItems);
+      }
+      await orderService.updateStatus(order.id, 'preparing');
+      await load();
+    } catch {
+      alert("Không thể cập nhật trạng thái");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelExchange = async () => {
+    if (!order?.exchangeFromOrderId) return;
+    if (!confirm("Sản phẩm cũ sẽ được trả về đơn gốc. Bạn có chắc chắn?")) return;
+    setActionLoading(true);
+    try {
+      // Restore stock for new items
+      const newItems = order.items.filter((i) => !i.isExchangeReturn);
+      if (newItems.length > 0) {
+        await inventoryService.restoreStock(newItems);
+      }
+      await orderService.cancelExchange(order.id);
+      router.push("/orders");
+    } catch {
+      alert("Không thể hủy đổi hàng");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -330,6 +487,14 @@ export default function OrderDetailPage() {
   const canCancel = ["confirmed", "preparing", "packed"].includes(order.status);
   const isDraft = order.status === "draft";
   const displayTotal = order.lockedTotal ?? order.total;
+  const isExchangeOrder = !!order.exchangeFromOrderId;
+
+  const filteredProducts = productSearch.trim()
+    ? allProducts.filter((p) =>
+        p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.sku.toLowerCase().includes(productSearch.toLowerCase())
+      )
+    : allProducts;
 
   return (
     <div className="max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-4 pb-24 lg:pb-8 space-y-4">
@@ -381,7 +546,7 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {order.exchangeFromOrderId && (
+        {isExchangeOrder && (
           <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
             <span className="text-xs font-semibold text-orange-700">Đơn đổi hàng</span>
           </div>
@@ -476,6 +641,9 @@ export default function OrderDetailPage() {
                   {item.isExchangeReturn && (
                     <span className="text-[10px] ml-1 text-orange-600 font-semibold">(Trả lại)</span>
                   )}
+                  {isExchangeOrder && !item.isExchangeReturn && (
+                    <span className="text-[10px] ml-1 text-green-600 font-semibold">(Mới)</span>
+                  )}
                 </p>
                 <p className="text-xs text-muted">
                   {[item.productColor, item.productSize].filter(Boolean).join(" | ")}
@@ -504,88 +672,135 @@ export default function OrderDetailPage() {
       <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-4 lg:self-start">
 
       {/* Totals */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
-        <h3 className="text-sm font-bold text-gray-900 pb-1">Tổng tiền</h3>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted">Tạm tính</span>
-          <span>{formatVND(order.subtotal)}</span>
-        </div>
-        {order.discountAmount > 0 && (
-          <>
+      {isExchangeOrder ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
+          <h3 className="text-sm font-bold text-purple-700 pb-1">Chi phí đổi hàng</h3>
+          {order.exchangePriceDiff !== 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">
-                Giảm giá {order.discountType === "percent" ? `(${order.discountValue}%)` : ""}
+              <span className="text-purple-600">Chênh lệch đổi hàng</span>
+              <span className="text-purple-600 font-semibold">
+                {order.exchangePriceDiff >= 0 ? '+' : ''}{formatVND(order.exchangePriceDiff)}
               </span>
-              <span className="text-red-500">-{formatVND(order.discountAmount)}</span>
             </div>
+          )}
+          {order.exchangeCost > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Giá sau giảm</span>
-              <span className="text-green-600 font-semibold">{formatVND(Math.max(0, order.subtotal - order.discountAmount))}</span>
+              <span className="text-purple-600">Chi phí đổi trả</span>
+              <span className="text-purple-600 font-semibold">{formatVND(order.exchangeCost)}</span>
             </div>
-          </>
-        )}
-        {order.shippingFee > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Phí vận chuyển</span>
-            <span>{formatVND(order.shippingFee)}</span>
+          )}
+          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+            <span className="font-bold text-purple-700">Chi phí báo khách</span>
+            <span className="text-xl font-bold text-purple-700">{formatVND(displayTotal)}</span>
           </div>
-        )}
-        {order.exchangeCost > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Phí đổi hàng</span>
-            <span>{formatVND(order.exchangeCost)}</span>
-          </div>
-        )}
-        {order.deposit > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Khách cọc</span>
-            <span className="text-green-600">-{formatVND(order.deposit)}</span>
-          </div>
-        )}
-        {order.platformFeeAmount > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted">Phí nền tảng</span>
-            <span className="text-orange-500">-{formatVND(order.platformFeeAmount)}</span>
-          </div>
-        )}
-        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-          <span className="font-bold text-gray-900">Tổng cộng</span>
-          <span className="text-xl font-bold text-primary">{formatVND(displayTotal)}</span>
         </div>
-        {order.deposit > 0 && (
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-2">
+          <h3 className="text-sm font-bold text-gray-900 pb-1">Tổng tiền</h3>
           <div className="flex justify-between text-sm">
-            <span className="text-muted">Còn thu hộ (COD)</span>
-            <span className="font-semibold">{formatVND(Math.max(0, displayTotal - order.deposit))}</span>
+            <span className="text-muted">Tạm tính</span>
+            <span>{formatVND(order.subtotal)}</span>
           </div>
-        )}
-      </div>
+          {order.discountAmount > 0 && (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">
+                  Giảm giá {order.discountType === "percent" ? `(${order.discountValue}%)` : ""}
+                </span>
+                <span className="text-red-500">-{formatVND(order.discountAmount)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Giá sau giảm</span>
+                <span className="text-green-600 font-semibold">{formatVND(Math.max(0, order.subtotal - order.discountAmount))}</span>
+              </div>
+            </>
+          )}
+          {order.shippingFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Phí vận chuyển</span>
+              <span>{formatVND(order.shippingFee)}</span>
+            </div>
+          )}
+          {order.exchangeCost > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Phí đổi hàng</span>
+              <span>{formatVND(order.exchangeCost)}</span>
+            </div>
+          )}
+          {order.deposit > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Khách cọc</span>
+              <span className="text-green-600">-{formatVND(order.deposit)}</span>
+            </div>
+          )}
+          {order.platformFeeAmount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Phí nền tảng</span>
+              <span className="text-orange-500">-{formatVND(order.platformFeeAmount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+            <span className="font-bold text-gray-900">Tổng cộng</span>
+            <span className="text-xl font-bold text-primary">{formatVND(displayTotal)}</span>
+          </div>
+          {order.deposit > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Còn thu hộ (COD)</span>
+              <span className="font-semibold">{formatVND(Math.max(0, displayTotal - order.deposit))}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="space-y-3">
-        {isDraft && (
+        {/* Exchange order: cancel + receive */}
+        {isExchangeOrder && ['confirmed', 'preparing'].includes(order.status) && (
           <button
-            onClick={() => {
-              if (order.items.length === 0) {
-                alert("Vui lòng thêm sản phẩm trước khi xác nhận");
-                return;
-              }
-              setPaymentConfirmOpen(true);
-            }}
+            onClick={handleCancelExchange}
             disabled={actionLoading}
-            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-sm"
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-red-500 border-2 border-red-200 hover:bg-red-50 disabled:opacity-50"
           >
-            Xác nhận đơn hàng
+            Hủy đổi hàng
           </button>
         )}
 
-        {canAdvance && (
+        {isExchangeOrder && order.status === 'confirmed' ? (
           <button
-            onClick={handleAdvanceStatus}
+            onClick={handleExchangeReceived}
             disabled={actionLoading}
-            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-sm"
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 shadow-sm"
           >
-            {actionLoading ? "Đang xử lý..." : NEXT_STATUS_LABEL[order.status]}
+            {actionLoading ? "Đang xử lý..." : "Đã nhận hàng đổi"}
           </button>
+        ) : (
+          <>
+            {isDraft && (
+              <button
+                onClick={() => {
+                  if (order.items.length === 0) {
+                    alert("Vui lòng thêm sản phẩm trước khi xác nhận");
+                    return;
+                  }
+                  setPaymentConfirmOpen(true);
+                }}
+                disabled={actionLoading}
+                className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-sm"
+              >
+                Xác nhận đơn hàng
+              </button>
+            )}
+
+            {canAdvance && (
+              <button
+                onClick={handleAdvanceStatus}
+                disabled={actionLoading}
+                className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-sm"
+              >
+                {actionLoading ? "Đang xử lý..." : NEXT_STATUS_LABEL[order.status]}
+              </button>
+            )}
+          </>
         )}
 
         {order.isWaiting && order.status === "confirmed" && (
@@ -627,7 +842,7 @@ export default function OrderDetailPage() {
           </button>
         )}
 
-        {canCancel && (
+        {!isExchangeOrder && canCancel && (
           <button
             onClick={handleCancel}
             disabled={actionLoading}
@@ -641,7 +856,7 @@ export default function OrderDetailPage() {
       </div>{/* end right column */}
       </div>{/* end grid */}
 
-      {/* Payment confirmation modal (for draft -> confirmed) */}
+      {/* Payment confirmation modal */}
       <Modal open={paymentConfirmOpen} onClose={() => setPaymentConfirmOpen(false)} title="Chọn phương thức thanh toán">
         <div className="space-y-3 pt-2">
           <button
@@ -704,6 +919,14 @@ export default function OrderDetailPage() {
               ✏️ Chỉnh sửa đơn hàng
             </button>
           )}
+          {canExchange && exchangeableItemIds.size > 0 && (
+            <button
+              onClick={startExchange}
+              className="w-full text-left px-4 py-3 rounded-lg hover:bg-purple-50 text-sm font-medium text-purple-700"
+            >
+              🔄 Đổi sản phẩm
+            </button>
+          )}
           {order.exchangeFromOrderId && (
             <Link
               href={`/orders/${order.exchangeFromOrderId}`}
@@ -722,6 +945,197 @@ export default function OrderDetailPage() {
               🔗 Xem đơn đổi hàng
             </Link>
           )}
+        </div>
+      </Modal>
+
+      {/* Exchange Step 1: Select items to exchange */}
+      <Modal open={exchangeStep === 1} onClose={() => setExchangeStep(0)} title="Chọn sản phẩm muốn đổi">
+        <div className="space-y-3 pt-2">
+          <p className="text-xs text-muted">Chọn sản phẩm trong đơn hàng mà bạn muốn đổi</p>
+          <div className="max-h-[300px] overflow-y-auto space-y-1">
+            {order.items.filter((i) => exchangeableItemIds.has(i.id)).map((item) => {
+              const selected = exchangeOldItems.has(item.id);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => toggleExchangeItem(item.id)}
+                  className={`w-full flex items-center justify-between px-3 py-3 rounded-lg border transition-colors ${
+                    selected ? "bg-orange-50 border-orange-300" : "bg-white border-gray-100 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {item.productImageUri && (
+                      <img src={item.productImageUri} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                    )}
+                    <div className="text-left min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {item.productName}{item.productColor ? ` (${item.productColor})` : ''}
+                      </p>
+                      <p className="text-xs text-muted">x{item.quantity} · {formatVND(item.unitPrice * item.quantity)}</p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    selected ? "border-orange-500 bg-orange-500" : "border-gray-300"
+                  }`}>
+                    {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={handleExchangeStep1Confirm}
+            disabled={exchangeOldItems.size === 0}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Tiếp tục — Chọn sản phẩm mới ({exchangeOldItems.size} đã chọn)
+          </button>
+        </div>
+      </Modal>
+
+      {/* Exchange Step 2: Pick new products */}
+      <Modal open={exchangeStep === 2} onClose={() => setExchangeStep(1)} title="Chọn sản phẩm mới">
+        <div className="space-y-3 pt-2">
+          <input
+            type="text"
+            placeholder="Tìm sản phẩm..."
+            value={productSearch}
+            onChange={(e) => setProductSearch(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {productsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="max-h-[300px] overflow-y-auto space-y-1">
+              {filteredProducts.filter((p) => p.stock > 0).map((product) => {
+                const selected = exchangeNewProducts.some((p) => p.id === product.id);
+                return (
+                  <button
+                    key={product.id}
+                    onClick={() => toggleNewProduct(product)}
+                    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg border transition-colors ${
+                      selected ? "bg-green-50 border-green-300" : "bg-white border-gray-100 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {product.imageUri && (
+                        <img src={product.imageUri} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                      )}
+                      <div className="text-left min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {product.name}{product.color ? ` (${product.color})` : ''}
+                        </p>
+                        <p className="text-xs text-muted">{product.sku} · {formatVND(product.price)} · Kho: {product.stock}</p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      selected ? "border-green-500 bg-green-500" : "border-gray-300"
+                    }`}>
+                      {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button
+            onClick={() => {
+              if (exchangeNewProducts.length === 0) return;
+              setExchangeStep(3);
+            }}
+            disabled={exchangeNewProducts.length === 0}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Tiếp tục — Xác nhận đổi ({exchangeNewProducts.length} sản phẩm mới)
+          </button>
+        </div>
+      </Modal>
+
+      {/* Exchange Step 3: Confirm */}
+      <Modal open={exchangeStep === 3} onClose={() => setExchangeStep(0)} title="Xác nhận đổi sản phẩm">
+        <div className="space-y-4 pt-2">
+          {/* Old items */}
+          <div>
+            <h4 className="text-sm font-bold text-red-600 mb-2">Sản phẩm trả lại</h4>
+            <div className="space-y-1">
+              {capturedOldItemsData.map((item) => (
+                <div key={item.id} className="flex justify-between items-center bg-red-50 rounded-lg px-3 py-2">
+                  <span className="text-sm text-red-700 truncate flex-1">
+                    {item.productName}{item.productColor ? ` (${item.productColor})` : ''} x{item.quantity}
+                  </span>
+                  <span className="text-sm font-semibold text-red-600 shrink-0 ml-2">
+                    -{formatVND(item.unitPrice * item.quantity)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* New items */}
+          <div>
+            <h4 className="text-sm font-bold text-green-600 mb-2">Sản phẩm mới</h4>
+            <div className="space-y-1">
+              {exchangeNewProducts.map((p) => (
+                <div key={p.id} className="flex justify-between items-center bg-green-50 rounded-lg px-3 py-2">
+                  <span className="text-sm text-green-700 truncate flex-1">
+                    {p.name}{p.color ? ` (${p.color})` : ''}
+                  </span>
+                  <span className="text-sm font-semibold text-green-600 shrink-0 ml-2">
+                    +{formatVND(p.price)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Exchange cost input */}
+          <div>
+            <label className="text-sm font-bold text-purple-700 block mb-1">Chi phí đổi trả</label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="0"
+                value={formatInputNumber(exchangeCostInput)}
+                onChange={(e) => setExchangeCostInput(e.target.value.replace(/[^\d]/g, ''))}
+                className="w-full px-3 py-2.5 rounded-lg border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">₫</span>
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="bg-purple-50 rounded-lg p-3 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-purple-600">Chênh lệch</span>
+              <span className="font-semibold text-purple-700">{priceDiff >= 0 ? '+' : ''}{formatVND(priceDiff)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-purple-600">Chi phí đổi trả</span>
+              <span className="font-semibold text-purple-700">{formatVND(parseNumber(exchangeCostInput))}</span>
+            </div>
+            <div className="flex justify-between text-sm pt-1 border-t border-purple-200">
+              <span className="font-bold text-purple-700">Chi phí báo khách</span>
+              <span className="font-bold text-purple-700">{formatVND(priceDiff + parseNumber(exchangeCostInput))}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setExchangeStep(0)}
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-gray-600 border-2 border-gray-200 hover:bg-gray-50"
+            >
+              Hủy
+            </button>
+            <button
+              onClick={handleExchangeConfirm}
+              disabled={exchangeCreating}
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
+            >
+              {exchangeCreating ? "Đang xử lý..." : "Xác nhận đổi"}
+            </button>
+          </div>
         </div>
       </Modal>
 
