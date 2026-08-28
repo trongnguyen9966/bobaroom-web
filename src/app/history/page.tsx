@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { OrderStatusBadge } from "@/components/ui/OrderStatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
@@ -76,10 +76,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [deductionsExpanded, setDeductionsExpanded] = useState(false);
   const [netExpanded, setNetExpanded] = useState(false);
-  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!initialized.current) setLoading(true);
     orderService.checkAndCompleteShipped().catch(() => {});
 
     const [startMs, endMs] = getDateRange(filter);
@@ -100,7 +98,6 @@ export default function DashboardPage() {
           ? orders.filter((o) => statuses.includes(o.status))
           : orders;
         setSections(groupByDate(filtered));
-        initialized.current = true;
         setLoading(false);
       },
     );
@@ -109,7 +106,7 @@ export default function DashboardPage() {
   }, [filter, statusFilter]);
 
   const handleFilterChange = (newFilter: DateFilter) => {
-    initialized.current = false;
+    setLoading(true);
     setFilter(newFilter);
   };
 
@@ -268,7 +265,7 @@ export default function DashboardPage() {
                   {(["all", ...ALL_STATUSES] as (OrderStatus | "all")[]).map((s) => (
                     <button
                       key={s}
-                      onClick={() => { initialized.current = false; setStatusFilter(s); }}
+                      onClick={() => { setLoading(true); setStatusFilter(s); }}
                       className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-colors ${
                         statusFilter === s
                           ? "bg-primary text-white"
