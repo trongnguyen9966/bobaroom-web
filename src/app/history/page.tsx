@@ -86,10 +86,6 @@ export default function DashboardPage() {
     const unsubscribe = orderService.subscribeToFiltered(
       { startMs, endMs },
       (orders) => {
-        // computeStats is async (fetches products + full orders for accurate COGS)
-        revenueService.computeStats(orders).then((computedStats) => {
-          setStats(computedStats);
-        });
         const computedChart = revenueService.getDailyChartData(orders, filter);
         setChartData(computedChart);
         setAllOrders(orders);
@@ -98,7 +94,12 @@ export default function DashboardPage() {
           ? orders.filter((o) => statuses.includes(o.status))
           : orders;
         setSections(groupByDate(filtered));
-        setLoading(false);
+
+        // computeStats is async — only hide loading after stats are ready
+        revenueService.computeStats(orders).then((computedStats) => {
+          setStats(computedStats);
+          setLoading(false);
+        });
       },
     );
 
@@ -107,6 +108,8 @@ export default function DashboardPage() {
 
   const handleFilterChange = (newFilter: DateFilter) => {
     setLoading(true);
+    setStats(emptyStats);
+    setChartData([]);
     setFilter(newFilter);
   };
 
