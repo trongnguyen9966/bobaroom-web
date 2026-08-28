@@ -159,11 +159,17 @@ export default function DashboardPage() {
             <CalendarPicker filter={filter} onChange={(f) => { handleFilterChange(f); }} />
           )}
 
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          {/* Loading overlay */}
+          {loading && (
+            <div className="fixed inset-0 bg-black/20 z-50 flex items-center justify-center">
+              <div className="bg-white rounded-2xl shadow-lg px-6 py-5 flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-medium text-gray-600">Đang tải dữ liệu...</p>
+              </div>
             </div>
-          ) : (
+          )}
+
+          {!loading && (
             <>
               {/* === Revenue breakdown — 3 cards matching mobile === */}
 
