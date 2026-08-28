@@ -433,7 +433,7 @@ export default function OrderDetailPage() {
     try {
       const returnedItems = order.items.filter((i) => i.isExchangeReturn);
       if (returnedItems.length > 0) {
-        await inventoryService.restoreStock(returnedItems);
+        await inventoryService.restoreStock(returnedItems, true);
       }
       await orderService.updateStatus(order.id, 'preparing');
       await load();

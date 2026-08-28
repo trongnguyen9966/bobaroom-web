@@ -53,8 +53,8 @@ export const inventoryService = {
   /**
    * Restore stock when a confirmed+ order is cancelled.
    */
-  async restoreStock(items: OrderItem[]): Promise<void> {
-    const restorable = items.filter((i) => !i.isExchangeReturn);
+  async restoreStock(items: OrderItem[], skipExchangeFilter?: boolean): Promise<void> {
+    const restorable = skipExchangeFilter ? items : items.filter((i) => !i.isExchangeReturn);
     if (restorable.length === 0) return;
 
     await runTransaction(db, async (tx) => {
