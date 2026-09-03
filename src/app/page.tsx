@@ -7,10 +7,15 @@ import { Product, ProductCategory } from "@/types";
 import { formatVND } from "@/utils/currency";
 import { ImageLightbox } from "@/components/catalog/ImageLightbox";
 
+function isWebUrl(uri: string | null | undefined): boolean {
+  if (!uri) return false;
+  return uri.startsWith("https://") || uri.startsWith("http://");
+}
+
 function getProductImages(product: Product): string[] {
   const imgs: string[] = [];
-  if (product.imageUri) imgs.push(product.imageUri);
-  if (product.realImageUris?.length) imgs.push(...product.realImageUris);
+  if (isWebUrl(product.imageUri)) imgs.push(product.imageUri!);
+  if (product.realImageUris?.length) imgs.push(...product.realImageUris.filter(isWebUrl));
   return imgs;
 }
 
@@ -226,7 +231,8 @@ export default function CatalogPage() {
   const renderProductCard = (product: Product, opts?: { topIdx?: number; showAddBtn?: boolean }) => {
     const outOfStock = product.stock === 0;
     const topRank = opts?.topIdx != null ? opts.topIdx : topSellerMap.get(product.id);
-    const hasRealImages = product.realImageUris?.length > 0;
+    const hasRealImages = product.realImageUris?.some(isWebUrl);
+    const hasMainImage = isWebUrl(product.imageUri);
     const qty = getSampleQty(product.id);
 
     return (
@@ -252,18 +258,18 @@ export default function CatalogPage() {
 
         {hasRealImages && !outOfStock && (
           <div className="absolute bottom-[calc(50%+8px)] right-2 z-10 bg-white/80 backdrop-blur text-[10px] font-bold text-pink-500 px-1.5 py-0.5 rounded-full">
-            +{product.realImageUris.length} ảnh
+            +{product.realImageUris.filter(isWebUrl).length} ảnh
           </div>
         )}
 
         <button
           onClick={() => openLightbox(product)}
           className="w-full aspect-square bg-pink-50/50 flex items-center justify-center overflow-hidden"
-          disabled={!product.imageUri && !hasRealImages}
+          disabled={!hasMainImage && !hasRealImages}
         >
-          {product.imageUri ? (
+          {hasMainImage ? (
             <img
-              src={product.imageUri}
+              src={product.imageUri!}
               alt={product.name}
               className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
               loading="lazy"
@@ -582,8 +588,8 @@ export default function CatalogPage() {
                 <div key={item.product.id} className="flex items-center gap-3 bg-pink-50/50 rounded-xl p-3">
                   {/* Product image */}
                   <div className="w-14 h-14 rounded-lg overflow-hidden bg-pink-100 shrink-0">
-                    {item.product.imageUri ? (
-                      <img src={item.product.imageUri} alt={item.product.name} className="w-full h-full object-cover" />
+                    {isWebUrl(item.product.imageUri) ? (
+                      <img src={item.product.imageUri!} alt={item.product.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-pink-300 text-lg">📦</div>
                     )}
