@@ -219,9 +219,7 @@ export default function OrderDetailPage() {
       const creationDay = new Date(order.createdAt).toDateString();
       const confirmDay = new Date(now).toDateString();
       if (creationDay !== confirmDay) {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        await orderService.updateCreatedAt(id, startOfToday.getTime());
+        await orderService.updateCreatedAt(id, now);
       }
 
       await load();

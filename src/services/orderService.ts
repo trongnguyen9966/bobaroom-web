@@ -323,9 +323,7 @@ export const orderService = {
       const creationDay = new Date(snap.data()!.createdAt as number).toDateString();
       const today = new Date().toDateString();
       if (creationDay !== today) {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        updates.createdAt = startOfToday.getTime();
+        updates.createdAt = now;
       }
     }
 
