@@ -317,6 +317,18 @@ export const orderService = {
     if (data.paymentMethod !== undefined) {
       updates.paymentMethod = data.paymentMethod;
     }
+
+    // If editing a draft from an old day, move it to today
+    if (snap.data()?.status === 'draft') {
+      const creationDay = new Date(snap.data()!.createdAt as number).toDateString();
+      const today = new Date().toDateString();
+      if (creationDay !== today) {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        updates.createdAt = startOfToday.getTime();
+      }
+    }
+
     await updateDoc(doc(db, ORDERS, id), updates);
   },
 
@@ -504,6 +516,22 @@ export const orderService = {
         console.error('[orderService] subscribeToFiltered error:', error);
         callback([]);
       },
+    );
+  },
+
+  subscribeToDepositPending(callback: (orders: OrderSummary[]) => void): () => void {
+    return onSnapshot(
+      fsQuery(
+        collection(db, ORDERS),
+        where('status', '==', 'draft'),
+        where('deposit', '>', 0),
+        orderBy('deposit'),
+        orderBy('createdAt', 'desc'),
+      ),
+      (snap) => {
+        callback(snap.docs.map(docToSummary));
+      },
+      () => callback([]),
     );
   },
 

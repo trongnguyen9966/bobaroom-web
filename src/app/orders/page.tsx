@@ -96,6 +96,10 @@ export default function OrdersPage() {
   const [bulkStatusVisible, setBulkStatusVisible] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // Deposit pending (đơn treo)
+  const [depositPending, setDepositPending] = useState<OrderSummary[]>([]);
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+
   // Pending filter state (in modal)
   const [pendingFilter, setPendingFilter] = useState<DateFilter>(DEFAULT_FILTER);
   const [pendingStatus, setPendingStatus] = useState<OrderStatus | "all">("all");
@@ -106,6 +110,11 @@ export default function OrdersPage() {
     platformFilter !== "all" ||
     filter.mode !== "day" ||
     filter.date.toDateString() !== new Date().toDateString();
+
+  // Subscribe to deposit-pending orders globally
+  useEffect(() => {
+    return orderService.subscribeToDepositPending(setDepositPending);
+  }, []);
 
   // Real-time Firestore listener
   useEffect(() => {
@@ -397,6 +406,39 @@ export default function OrdersPage() {
           </button>
         </div>
       )}
+
+      {/* Deposit pending floating badge */}
+      {depositPending.length > 0 && !selectMode && (
+        <button
+          onClick={() => setDepositModalOpen(true)}
+          className="fixed bottom-20 lg:bottom-6 right-4 z-50 flex items-center gap-2 bg-amber-500 text-white px-4 py-2.5 rounded-full shadow-lg hover:bg-amber-600 transition-colors"
+        >
+          <span className="text-sm font-bold">{depositPending.length}</span>
+          <span className="text-sm font-medium">đơn cọc chờ xác nhận</span>
+        </button>
+      )}
+
+      {/* Deposit pending modal */}
+      <Modal open={depositModalOpen} onClose={() => setDepositModalOpen(false)} title={`Đơn cọc chờ xác nhận (${depositPending.length})`}>
+        <div className="space-y-2">
+          {depositPending.map((order) => (
+            <Link
+              key={order.id}
+              href={`/orders/${order.id}`}
+              onClick={() => setDepositModalOpen(false)}
+              className="block bg-amber-50 border border-amber-200 rounded-xl p-3.5 hover:bg-amber-100 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-900">{order.customerName || "Khách hàng"}</span>
+                <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Cọc {formatVND(order.deposit)}</span>
+              </div>
+              {order.customerPhone && <p className="text-xs text-muted mt-0.5">{order.customerPhone}</p>}
+              {order.itemNames && <p className="text-xs text-muted mt-0.5 truncate">{order.itemNames}</p>}
+              <p className="text-sm font-bold text-primary mt-1">{formatVND(order.total)}</p>
+            </Link>
+          ))}
+        </div>
+      </Modal>
 
       {/* Bulk status modal */}
       <Modal open={bulkStatusVisible} onClose={() => setBulkStatusVisible(false)} title="Chuyển sang trạng thái">
