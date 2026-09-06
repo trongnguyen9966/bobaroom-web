@@ -547,19 +547,29 @@ export const orderService = {
   },
 
   async setEditingBy(orderId: string, sessionId: string): Promise<void> {
-    await updateDoc(doc(db, ORDERS, orderId), { editingBy: sessionId, updatedAt: Date.now() });
+    await updateDoc(doc(db, ORDERS, orderId), { editingBy: sessionId, editingAt: Date.now(), updatedAt: Date.now() });
   },
 
   async clearEditingBy(orderId: string, sessionId: string): Promise<void> {
     const snap = await getDoc(doc(db, ORDERS, orderId));
     if (snap.exists() && snap.data()?.editingBy === sessionId) {
-      await updateDoc(doc(db, ORDERS, orderId), { editingBy: null, updatedAt: Date.now() });
+      await updateDoc(doc(db, ORDERS, orderId), { editingBy: null, editingAt: null, updatedAt: Date.now() });
     }
   },
 
-  async checkEditingBy(orderId: string): Promise<string | null> {
+  async checkEditingBy(orderId: string, currentSessionId?: string): Promise<string | null> {
     const snap = await getDoc(doc(db, ORDERS, orderId));
-    return snap.data()?.editingBy ?? null;
+    const data = snap.data();
+    const editor = data?.editingBy ?? null;
+    if (!editor) return null;
+    if (currentSessionId && editor === currentSessionId) return null;
+    const editingAt = data?.editingAt ?? 0;
+    const STALE_MS = 5 * 60 * 1000; // 5 minutes
+    if (Date.now() - editingAt > STALE_MS) {
+      await updateDoc(doc(db, ORDERS, orderId), { editingBy: null, editingAt: null, updatedAt: Date.now() });
+      return null;
+    }
+    return editor;
   },
 
   async getItems(orderId: string): Promise<OrderItem[]> {
