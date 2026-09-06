@@ -185,7 +185,12 @@ export default function OrderDetailPage() {
           setActionLoading(false);
           return;
         }
-        await inventoryService.deductStock(updatedItems);
+        const retry = await inventoryService.deductStock(updatedItems);
+        if (!retry.success) {
+          alert("Không đủ tồn kho để xác nhận. Vui lòng kiểm tra lại.");
+          setActionLoading(false);
+          return;
+        }
         const removedNames = order.items
           .filter((i) => outOfStockProductIds.includes(i.productId))
           .map((i) => i.productName)
@@ -254,11 +259,14 @@ export default function OrderDetailPage() {
       return;
     }
     if (!confirm("Đơn hàng sẽ bị xóa vĩnh viễn. Bạn có chắc chắn?")) return;
+    setActionLoading(true);
     try {
       await orderService.delete(id);
       router.push("/orders");
     } catch {
       alert("Không thể xóa đơn hàng");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -329,12 +337,17 @@ export default function OrderDetailPage() {
   };
 
   const handleEdit = async () => {
-    const currentEditor = await orderService.checkEditingBy(id);
-    if (currentEditor) {
-      alert("Đơn hàng đang được chỉnh sửa trên thiết bị khác. Vui lòng thử lại sau.");
-      return;
+    setActionLoading(true);
+    try {
+      const currentEditor = await orderService.checkEditingBy(id);
+      if (currentEditor) {
+        alert("Đơn hàng đang được chỉnh sửa trên thiết bị khác. Vui lòng thử lại sau.");
+        return;
+      }
+      router.push(`/orders/create?editId=${id}`);
+    } finally {
+      setActionLoading(false);
     }
-    router.push(`/orders/create?editId=${id}`);
   };
 
   // === Exchange handlers ===
@@ -825,7 +838,8 @@ export default function OrderDetailPage() {
         {canEdit && (
           <button
             onClick={handleEdit}
-            className="w-full py-3.5 rounded-xl text-sm font-bold text-primary border-2 border-primary hover:bg-blue-50"
+            disabled={actionLoading}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-primary border-2 border-primary hover:bg-blue-50 disabled:opacity-50"
           >
             Chỉnh sửa đơn hàng
           </button>
@@ -834,7 +848,8 @@ export default function OrderDetailPage() {
         {isDraft && (
           <button
             onClick={handleDelete}
-            className="w-full py-3.5 rounded-xl text-sm font-bold text-red-500 border-2 border-red-200 hover:bg-red-50"
+            disabled={actionLoading}
+            className="w-full py-3.5 rounded-xl text-sm font-bold text-red-500 border-2 border-red-200 hover:bg-red-50 disabled:opacity-50"
           >
             Xóa đơn hàng
           </button>
@@ -1136,6 +1151,16 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Action loading overlay */}
+      {actionLoading && (
+        <div className="fixed inset-0 bg-black/20 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-lg px-6 py-5 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium text-gray-600">Đang xử lý...</p>
+          </div>
+        </div>
+      )}
 
       {/* Capturing overlay */}
       {capturing && (

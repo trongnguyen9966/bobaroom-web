@@ -93,9 +93,6 @@ export const inventoryService = {
       if (snap.exists()) stockMap.set(snap.id, snap.data()!.stock as number);
     });
 
-    const zeroStockIds = productIds.filter((pid) => (stockMap.get(pid) ?? 0) === 0);
-    if (zeroStockIds.length === 0) return;
-
     const draftSnap = await getDocs(
       query(collection(db, ORDERS), where('status', '==', 'draft')),
     );
@@ -111,9 +108,13 @@ export const inventoryService = {
 
       const removedNames: string[] = [];
       const keptItems = items.filter((item) => {
-        if (!zeroStockIds.includes(item.productId)) return true;
-        removedNames.push(item.productName || nameMap.get(item.productId) || item.productId);
-        return false;
+        if (!productIds.includes(item.productId)) return true;
+        const stock = stockMap.get(item.productId) ?? 0;
+        if (stock < item.quantity) {
+          removedNames.push(item.productName || nameMap.get(item.productId) || item.productId);
+          return false;
+        }
+        return true;
       });
 
       if (removedNames.length > 0) {
