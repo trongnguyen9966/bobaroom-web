@@ -75,6 +75,8 @@ export interface AppSettings {
   waitingOrderCategoryIds: string[];
   defaultShippingFeeEnabled: boolean;
   defaultShippingFee: number;
+  catalogPromoEnabled: boolean;
+  catalogPromoDiscountValue: number;
 }
 
 export interface Order {

@@ -282,6 +282,24 @@ export default function SettingsPage() {
             )}
           </SettingCard>
 
+          {/* Catalog Promo Popup */}
+          <SettingCard title="Popup khuyến mãi (Catalog)">
+            <ToggleRow
+              label="Hiển thị popup khi vào trang catalog"
+              checked={settings.catalogPromoEnabled}
+              onChange={(v) => updateSetting("catalogPromoEnabled", v)}
+            />
+            {settings.catalogPromoEnabled && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <NumberInput
+                  label="Giảm giá (%)"
+                  value={settings.catalogPromoDiscountValue}
+                  onChange={(v) => updateSetting("catalogPromoDiscountValue", v)}
+                />
+              </div>
+            )}
+          </SettingCard>
+
           {/* Google Sheets */}
           <SettingCard title="Google Sheets">
             <div>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { ensureAuth } from "@/services/firebase";
 import { catalogService, TopSeller } from "@/services/catalogService";
 import { settingsService } from "@/services/settingsService";
-import { Product, ProductCategory, AppSettings } from "@/types";
+import { Product, ProductCategory } from "@/types";
 import { formatVND } from "@/utils/currency";
 import { ImageLightbox } from "@/components/catalog/ImageLightbox";
 
@@ -51,7 +51,7 @@ export default function CatalogPage() {
   const [copied, setCopied] = useState(false);
   const [sendToast, setSendToast] = useState<string | null>(null);
   const [showPromo, setShowPromo] = useState(false);
-  const [promoSettings, setPromoSettings] = useState<Pick<AppSettings, 'promotionEnabled' | 'promotionDiscountValue' | 'promotionDiscountType'> | null>(null);
+  const [promoDiscountValue, setPromoDiscountValue] = useState(15);
 
   const sampleCount = useMemo(() => sampleItems.reduce((sum, i) => sum + i.quantity, 0), [sampleItems]);
 
@@ -160,12 +160,8 @@ export default function CatalogPage() {
   // Load promo settings and show popup on first visit
   useEffect(() => {
     settingsService.get().then((s) => {
-      setPromoSettings({
-        promotionEnabled: s.promotionEnabled,
-        promotionDiscountValue: s.promotionDiscountValue,
-        promotionDiscountType: s.promotionDiscountType,
-      });
-      if (s.promotionEnabled && s.promotionDiscountValue > 0) {
+      if (s.catalogPromoEnabled && s.catalogPromoDiscountValue > 0) {
+        setPromoDiscountValue(s.catalogPromoDiscountValue);
         setShowPromo(true);
       }
     });
@@ -752,11 +748,7 @@ export default function CatalogPage() {
           <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden animate-slide-up shadow-2xl">
             <div className="bg-gradient-to-br from-pink-500 via-pink-400 to-amber-400 px-6 py-5 text-center">
               <p className="text-white text-[10px] font-medium tracking-widest uppercase mb-1">Chương trình ưu đãi</p>
-              <p className="text-white text-4xl font-extrabold">
-                GIẢM {promoSettings?.promotionDiscountType === 'vnd'
-                  ? `${(promoSettings?.promotionDiscountValue ?? 0).toLocaleString('vi-VN')}đ`
-                  : `${promoSettings?.promotionDiscountValue ?? 0}%`}
-              </p>
+              <p className="text-white text-4xl font-extrabold">GIẢM {promoDiscountValue}%</p>
               <p className="text-white/90 text-xs font-medium mt-1">Áp dụng ngay khi mua hàng</p>
             </div>
             <div className="px-6 py-5 space-y-3">

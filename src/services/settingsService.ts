@@ -26,6 +26,8 @@ const DEFAULTS: AppSettings = {
   waitingOrderCategoryIds: [],
   defaultShippingFeeEnabled: false,
   defaultShippingFee: 0,
+  catalogPromoEnabled: true,
+  catalogPromoDiscountValue: 15,
 };
 
 function merge(data: Record<string, unknown>): AppSettings {
