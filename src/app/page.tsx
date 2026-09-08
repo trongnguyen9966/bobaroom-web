@@ -309,13 +309,15 @@ export default function CatalogPage() {
           {product.color && (
             <p className="text-[10px] text-pink-400">{product.color}</p>
           )}
-          {comboDiscountPercent > 0 && !outOfStock && (
-            <p className="text-[10px] text-amber-600 font-semibold">
-              Giá combo: {formatVND(Math.round(product.price * (1 - comboDiscountPercent / 100)))}
-            </p>
-          )}
           <div className="flex items-center justify-between pt-1">
-            <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
+            <div>
+              <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
+              {comboDiscountPercent > 0 && !outOfStock && (
+                <p className="text-xs font-bold text-amber-600">
+                  Giá combo: {formatVND(Math.round(product.price * (1 - comboDiscountPercent / 100)))}
+                </p>
+              )}
+            </div>
             {!outOfStock && qty === 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); addToSample(product); }}
