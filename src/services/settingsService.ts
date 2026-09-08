@@ -26,6 +26,7 @@ const DEFAULTS: AppSettings = {
   waitingOrderCategoryIds: [],
   defaultShippingFeeEnabled: false,
   defaultShippingFee: 0,
+  comboDiscountPercent: 0,
   catalogPromoEnabled: true,
   catalogPromoTitle: 'GIẢM 15%',
   catalogPromoDescription: 'Áp dụng ngay khi mua hàng',

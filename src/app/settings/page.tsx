@@ -282,6 +282,16 @@ export default function SettingsPage() {
             )}
           </SettingCard>
 
+          {/* Combo Discount */}
+          <SettingCard title="Giảm giá combo">
+            <NumberInput
+              label="Giảm giá combo (%)"
+              value={settings.comboDiscountPercent}
+              onChange={(v) => updateSetting("comboDiscountPercent", v)}
+            />
+            <p className="text-xs text-muted mt-1">Hiển thị &quot;Giá combo&quot; trên catalog = giá bán - %</p>
+          </SettingCard>
+
           {/* Catalog Promo Popup */}
           <SettingCard title="Popup khuyến mãi (Catalog)">
             <ToggleRow

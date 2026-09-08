@@ -79,6 +79,7 @@ export interface AppSettings {
   catalogPromoTitle: string;
   catalogPromoDescription: string;
   catalogPromoItems: CatalogPromoItem[];
+  comboDiscountPercent: number;
 }
 
 export interface CatalogPromoItem {

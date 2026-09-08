@@ -55,6 +55,7 @@ export default function CatalogPage() {
   const [promoTitle, setPromoTitle] = useState("");
   const [promoDescription, setPromoDescription] = useState("");
   const [promoItems, setPromoItems] = useState<CatalogPromoItem[]>([]);
+  const [comboDiscountPercent, setComboDiscountPercent] = useState(0);
 
   const sampleCount = useMemo(() => sampleItems.reduce((sum, i) => sum + i.quantity, 0), [sampleItems]);
 
@@ -168,6 +169,9 @@ export default function CatalogPage() {
         setPromoDescription(s.catalogPromoDescription);
         setPromoItems(s.catalogPromoItems ?? []);
         setShowPromo(true);
+      }
+      if (s.comboDiscountPercent > 0) {
+        setComboDiscountPercent(s.comboDiscountPercent);
       }
     });
   }, []);
@@ -304,6 +308,11 @@ export default function CatalogPage() {
           </p>
           {product.color && (
             <p className="text-[10px] text-pink-400">{product.color}</p>
+          )}
+          {comboDiscountPercent > 0 && !outOfStock && (
+            <p className="text-[10px] text-amber-600 font-semibold">
+              Giá combo: {formatVND(Math.round(product.price * (1 - comboDiscountPercent / 100)))}
+            </p>
           )}
           <div className="flex items-center justify-between pt-1">
             <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
