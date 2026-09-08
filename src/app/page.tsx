@@ -345,41 +345,42 @@ export default function CatalogPage() {
     <div ref={scrollRef} className="min-h-screen bg-[#FFF8F5]">
       {/* Header */}
       <header className="bg-gradient-to-r from-pink-100 via-pink-50 to-amber-50 border-b border-pink-100">
-        <div className="max-w-6xl mx-auto px-4 py-5 sm:py-6">
-          <div className="flex items-center gap-3 sm:gap-4">
+        <div className="max-w-6xl mx-auto px-4 py-5 sm:py-6 space-y-4">
+          {/* Logo + Title */}
+          <div className="flex flex-col items-center gap-2">
             <img
               src="/logo.png"
               alt="Boba Room"
-              className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 object-contain rounded-full bg-white"
+              className="w-20 h-20 sm:w-24 sm:h-24 object-contain rounded-full bg-white shadow-sm"
             />
-
-            <div className="shrink-0 bg-[#FFF5F0] border border-pink-100 rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 text-center relative">
+            <div className="bg-[#FFF5F0] border border-pink-100 rounded-xl px-5 sm:px-6 py-2.5 text-center relative">
               <span className="text-pink-300 text-[10px] absolute top-1 left-2">✦</span>
               <span className="text-pink-300 text-[10px] absolute top-1 right-2">✦</span>
               <span className="text-pink-300 text-[10px] absolute bottom-1 left-2">✦</span>
               <span className="text-pink-300 text-[10px] absolute bottom-1 right-2">✦</span>
-              <p className="text-sm sm:text-base font-extrabold text-amber-900 leading-tight">Lắc charm</p>
-              <p className="text-sm sm:text-base font-extrabold text-amber-900 leading-tight">titan</p>
+              <p className="text-base sm:text-lg font-extrabold text-amber-900 leading-tight">Lắc charm titan</p>
             </div>
+          </div>
 
-            <div className="flex-1 min-w-0 bg-[#FFF5F0] rounded-xl px-4 py-3 border border-pink-100 relative">
-              <span className="text-pink-300 text-[10px] absolute top-1 left-2">✦</span>
-              <span className="text-pink-300 text-[10px] absolute top-1 right-2">✦</span>
-              <span className="text-pink-300 text-[10px] absolute bottom-1 right-2">✦</span>
-              <ul className="space-y-0.5">
-                {[
-                  "Lắc thép không gỉ, charm thép không gỉ",
-                  "Đụng nước thoải mái",
-                  "Không đen gỉ, bền bỉ theo thời gian",
-                  "Giá thành hợp lý, sở hữu trọn đời",
-                ].map((text) => (
-                  <li key={text} className="flex items-start gap-1.5">
-                    <span className="text-amber-800 mt-0.5 text-xs leading-none shrink-0">•</span>
-                    <span className="text-xs sm:text-sm font-bold text-amber-900">{text}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* Banner info */}
+          <div className="bg-[#FFF5F0] rounded-xl px-5 py-4 border border-pink-100 relative">
+            <span className="text-pink-300 text-[10px] absolute top-1.5 left-2.5">✦</span>
+            <span className="text-pink-300 text-[10px] absolute top-1.5 right-2.5">✦</span>
+            <span className="text-pink-300 text-[10px] absolute bottom-1.5 left-2.5">✦</span>
+            <span className="text-pink-300 text-[10px] absolute bottom-1.5 right-2.5">✦</span>
+            <ul className="space-y-1">
+              {[
+                "Lắc thép không gỉ, charm thép không gỉ",
+                "Đụng nước thoải mái",
+                "Không đen gỉ, bền bỉ theo thời gian",
+                "Giá thành hợp lý, sở hữu trọn đời",
+              ].map((text) => (
+                <li key={text} className="flex items-start gap-2">
+                  <span className="text-amber-800 mt-0.5 text-sm leading-none shrink-0">•</span>
+                  <span className="text-sm sm:text-base font-bold text-amber-900">{text}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </header>
