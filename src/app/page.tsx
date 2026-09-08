@@ -49,6 +49,7 @@ export default function CatalogPage() {
   const [showSendGuide, setShowSendGuide] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sendToast, setSendToast] = useState<string | null>(null);
+  const [showPromo, setShowPromo] = useState(false);
 
   const sampleCount = useMemo(() => sampleItems.reduce((sum, i) => sum + i.quantity, 0), [sampleItems]);
 
@@ -154,6 +155,12 @@ export default function CatalogPage() {
     return () => { unsubProducts?.(); unsubCategories?.(); };
   }, []);
 
+  // Show promo popup on first visit
+  useEffect(() => {
+    const dismissed = sessionStorage.getItem("promo_dismissed");
+    if (!dismissed) setShowPromo(true);
+  }, []);
+
   const handlePeriodChange = useCallback((period: "month" | "year") => {
     setTopPeriod(period);
     catalogService.getTopSellers(period).then(setTopSellers);
@@ -244,12 +251,6 @@ export default function CatalogPage() {
             : "border-pink-100 shadow-sm hover:shadow-md"
         }`}
       >
-        {outOfStock && (
-          <div className="absolute top-2 right-2 z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-            Hết hàng
-          </div>
-        )}
-
         {topRank && !outOfStock && (
           <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
             TOP {topRank}
@@ -263,19 +264,26 @@ export default function CatalogPage() {
         )}
 
         <button
-          onClick={() => openLightbox(product)}
-          className="w-full aspect-square bg-pink-50/50 flex items-center justify-center overflow-hidden"
-          disabled={!hasMainImage && !hasRealImages}
+          onClick={() => !outOfStock && openLightbox(product)}
+          className={`w-full aspect-square bg-pink-50/50 flex items-center justify-center overflow-hidden relative ${outOfStock ? "cursor-default" : ""}`}
+          disabled={outOfStock || (!hasMainImage && !hasRealImages)}
         >
           {hasMainImage ? (
             <img
               src={product.imageUri!}
               alt={product.name}
-              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              className={`w-full h-full object-cover transition-transform duration-300 ${outOfStock ? "opacity-40" : "hover:scale-105"}`}
               loading="lazy"
             />
           ) : (
             <span className="text-3xl text-pink-200">📦</span>
+          )}
+          {outOfStock && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-pink-400 flex items-center justify-center shadow-lg">
+                <span className="text-white text-[11px] font-bold leading-tight text-center">Hết<br/>hàng</span>
+              </div>
+            </div>
           )}
         </button>
 
@@ -286,6 +294,18 @@ export default function CatalogPage() {
           {product.color && (
             <p className="text-[10px] text-pink-400">{product.color}</p>
           )}
+          {/* Product content badges */}
+          <div className="flex items-center gap-1 pt-0.5">
+            {[
+              { icon: "🛡️", label: "Titan 100%" },
+              { icon: "✨", label: "Không kích ứng" },
+              { icon: "💎", label: "Không đen gỉ" },
+            ].map((badge) => (
+              <span key={badge.label} className="inline-flex items-center gap-0.5 bg-pink-50 text-[7px] font-semibold text-pink-500 px-1 py-0.5 rounded">
+                <span className="text-[8px]">{badge.icon}</span>{badge.label}
+              </span>
+            ))}
+          </div>
           <div className="flex items-center justify-between pt-1">
             <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
             {!outOfStock && qty === 0 && (
@@ -710,6 +730,44 @@ export default function CatalogPage() {
       {sendToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] bg-gray-900 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium max-w-sm text-center animate-slide-down">
           {sendToast}
+        </div>
+      )}
+
+      {/* Promotion popup */}
+      {showPromo && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center px-6"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowPromo(false); sessionStorage.setItem("promo_dismissed", "1"); } }}
+        >
+          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden animate-slide-up shadow-2xl">
+            <div className="bg-gradient-to-br from-pink-500 via-pink-400 to-amber-400 px-6 py-5 text-center">
+              <p className="text-white text-[10px] font-medium tracking-widest uppercase mb-1">Chương trình ưu đãi</p>
+              <p className="text-white text-4xl font-extrabold">GIẢM 15%</p>
+              <p className="text-white/90 text-xs font-medium mt-1">Áp dụng ngay khi mua hàng</p>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <div className="flex items-start gap-3 bg-pink-50 rounded-xl p-3">
+                <span className="text-lg">🎁</span>
+                <div>
+                  <p className="text-sm font-bold text-gray-800">Combo Lắc/Kiềng + Charm</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Mua 1 lắc hoặc kiềng kèm charm bất kỳ</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 bg-pink-50 rounded-xl p-3">
+                <span className="text-lg">✨</span>
+                <div>
+                  <p className="text-sm font-bold text-gray-800">Mua từ 3 Charm trở lên</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Áp dụng cho tất cả các loại charm</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowPromo(false); sessionStorage.setItem("promo_dismissed", "1"); }}
+                className="w-full py-3 rounded-full bg-pink-500 text-white font-bold text-sm hover:bg-pink-600 active:bg-pink-700 transition-colors shadow-sm mt-2"
+              >
+                Xem ngay
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
