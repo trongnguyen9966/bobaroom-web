@@ -314,7 +314,7 @@ export default function CatalogPage() {
               <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
               {comboDiscountPercent > 0 && !outOfStock && (
                 <p className="text-xs font-bold text-amber-600">
-                  Giá combo: {formatVND(Math.round(product.price * (1 - comboDiscountPercent / 100)))}
+                  Giá combo còn: {formatVND(Math.round(product.price * (1 - comboDiscountPercent / 100)))}
                 </p>
               )}
             </div>
