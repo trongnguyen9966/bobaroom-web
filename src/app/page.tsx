@@ -305,18 +305,6 @@ export default function CatalogPage() {
           {product.color && (
             <p className="text-[10px] text-pink-400">{product.color}</p>
           )}
-          {/* Product content badges */}
-          <div className="flex items-center gap-1 pt-0.5">
-            {[
-              { icon: "🛡️", label: "Titan 100%" },
-              { icon: "✨", label: "Không kích ứng" },
-              { icon: "💎", label: "Không đen gỉ" },
-            ].map((badge) => (
-              <span key={badge.label} className="inline-flex items-center gap-0.5 bg-pink-50 text-[9px] font-semibold text-pink-500 px-1.5 py-0.5 rounded">
-                <span className="text-[10px]">{badge.icon}</span>{badge.label}
-              </span>
-            ))}
-          </div>
           <div className="flex items-center justify-between pt-1">
             <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>
             {!outOfStock && qty === 0 && (
