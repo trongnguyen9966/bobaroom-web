@@ -425,7 +425,15 @@ export default function OrderDetailPage() {
         productColor: p.color, productSize: p.size, productImageUri: p.imageUri,
         currentStock: 0, costPrice: p.costPrice, isExchangeReturn: false,
       }));
-      await inventoryService.deductStock(newOrderItems);
+      const { success } = await inventoryService.deductStock(newOrderItems);
+      if (!success) {
+        // Rollback: cancel exchange to restore old items to main order
+        await inventoryService.restoreStock(newOrderItems);
+        await orderService.cancelExchange(exchangeOrderId);
+        alert("Không đủ tồn kho cho sản phẩm mới. Đơn đổi đã bị hủy.");
+        await load();
+        return;
+      }
 
       setExchangeStep(0);
       alert("Đã tạo đơn đổi hàng thành công!");
