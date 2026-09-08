@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { ensureAuth } from "@/services/firebase";
 import { catalogService, TopSeller } from "@/services/catalogService";
-import { Product, ProductCategory } from "@/types";
+import { settingsService } from "@/services/settingsService";
+import { Product, ProductCategory, AppSettings } from "@/types";
 import { formatVND } from "@/utils/currency";
 import { ImageLightbox } from "@/components/catalog/ImageLightbox";
 
@@ -50,6 +51,7 @@ export default function CatalogPage() {
   const [copied, setCopied] = useState(false);
   const [sendToast, setSendToast] = useState<string | null>(null);
   const [showPromo, setShowPromo] = useState(false);
+  const [promoSettings, setPromoSettings] = useState<Pick<AppSettings, 'promotionEnabled' | 'promotionDiscountValue' | 'promotionDiscountType'> | null>(null);
 
   const sampleCount = useMemo(() => sampleItems.reduce((sum, i) => sum + i.quantity, 0), [sampleItems]);
 
@@ -155,10 +157,18 @@ export default function CatalogPage() {
     return () => { unsubProducts?.(); unsubCategories?.(); };
   }, []);
 
-  // Show promo popup on first visit
+  // Load promo settings and show popup on first visit
   useEffect(() => {
-    const dismissed = sessionStorage.getItem("promo_dismissed");
-    if (!dismissed) setShowPromo(true);
+    settingsService.get().then((s) => {
+      setPromoSettings({
+        promotionEnabled: s.promotionEnabled,
+        promotionDiscountValue: s.promotionDiscountValue,
+        promotionDiscountType: s.promotionDiscountType,
+      });
+      if (s.promotionEnabled && s.promotionDiscountValue > 0) {
+        setShowPromo(true);
+      }
+    });
   }, []);
 
   const handlePeriodChange = useCallback((period: "month" | "year") => {
@@ -301,8 +311,8 @@ export default function CatalogPage() {
               { icon: "✨", label: "Không kích ứng" },
               { icon: "💎", label: "Không đen gỉ" },
             ].map((badge) => (
-              <span key={badge.label} className="inline-flex items-center gap-0.5 bg-pink-50 text-[7px] font-semibold text-pink-500 px-1 py-0.5 rounded">
-                <span className="text-[8px]">{badge.icon}</span>{badge.label}
+              <span key={badge.label} className="inline-flex items-center gap-0.5 bg-pink-50 text-[9px] font-semibold text-pink-500 px-1.5 py-0.5 rounded">
+                <span className="text-[10px]">{badge.icon}</span>{badge.label}
               </span>
             ))}
           </div>
@@ -737,12 +747,16 @@ export default function CatalogPage() {
       {showPromo && (
         <div
           className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center px-6"
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowPromo(false); sessionStorage.setItem("promo_dismissed", "1"); } }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPromo(false); }}
         >
           <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden animate-slide-up shadow-2xl">
             <div className="bg-gradient-to-br from-pink-500 via-pink-400 to-amber-400 px-6 py-5 text-center">
               <p className="text-white text-[10px] font-medium tracking-widest uppercase mb-1">Chương trình ưu đãi</p>
-              <p className="text-white text-4xl font-extrabold">GIẢM 15%</p>
+              <p className="text-white text-4xl font-extrabold">
+                GIẢM {promoSettings?.promotionDiscountType === 'vnd'
+                  ? `${(promoSettings?.promotionDiscountValue ?? 0).toLocaleString('vi-VN')}đ`
+                  : `${promoSettings?.promotionDiscountValue ?? 0}%`}
+              </p>
               <p className="text-white/90 text-xs font-medium mt-1">Áp dụng ngay khi mua hàng</p>
             </div>
             <div className="px-6 py-5 space-y-3">
@@ -761,7 +775,7 @@ export default function CatalogPage() {
                 </div>
               </div>
               <button
-                onClick={() => { setShowPromo(false); sessionStorage.setItem("promo_dismissed", "1"); }}
+                onClick={() => setShowPromo(false)}
                 className="w-full py-3 rounded-full bg-pink-500 text-white font-bold text-sm hover:bg-pink-600 active:bg-pink-700 transition-colors shadow-sm mt-2"
               >
                 Xem ngay
