@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { ensureAuth } from "@/services/firebase";
 import { catalogService, TopSeller } from "@/services/catalogService";
 import { settingsService } from "@/services/settingsService";
-import { Product, ProductCategory } from "@/types";
+import { Product, ProductCategory, CatalogPromoItem } from "@/types";
 import { formatVND } from "@/utils/currency";
 import { ImageLightbox } from "@/components/catalog/ImageLightbox";
 
@@ -20,6 +20,7 @@ function getProductImages(product: Product): string[] {
   return imgs;
 }
 
+const PROMO_ICONS = ["🎁", "✨", "💎", "🎀", "🌸", "💖", "🎉", "🛍️"];
 const EXCLUDED_CATEGORIES = ["chặn charm", "tặng"];
 const ZALO_PHONE = "0836879035";
 const FB_PAGE_URL = "https://m.me/bobaroomdiary";
@@ -51,7 +52,9 @@ export default function CatalogPage() {
   const [copied, setCopied] = useState(false);
   const [sendToast, setSendToast] = useState<string | null>(null);
   const [showPromo, setShowPromo] = useState(false);
-  const [promoDiscountValue, setPromoDiscountValue] = useState(15);
+  const [promoTitle, setPromoTitle] = useState("");
+  const [promoDescription, setPromoDescription] = useState("");
+  const [promoItems, setPromoItems] = useState<CatalogPromoItem[]>([]);
 
   const sampleCount = useMemo(() => sampleItems.reduce((sum, i) => sum + i.quantity, 0), [sampleItems]);
 
@@ -160,8 +163,10 @@ export default function CatalogPage() {
   // Load promo settings and show popup on first visit
   useEffect(() => {
     settingsService.get().then((s) => {
-      if (s.catalogPromoEnabled && s.catalogPromoDiscountValue > 0) {
-        setPromoDiscountValue(s.catalogPromoDiscountValue);
+      if (s.catalogPromoEnabled && s.catalogPromoTitle) {
+        setPromoTitle(s.catalogPromoTitle);
+        setPromoDescription(s.catalogPromoDescription);
+        setPromoItems(s.catalogPromoItems ?? []);
         setShowPromo(true);
       }
     });
@@ -748,24 +753,23 @@ export default function CatalogPage() {
           <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden animate-slide-up shadow-2xl">
             <div className="bg-gradient-to-br from-pink-500 via-pink-400 to-amber-400 px-6 py-5 text-center">
               <p className="text-white text-[10px] font-medium tracking-widest uppercase mb-1">Chương trình ưu đãi</p>
-              <p className="text-white text-4xl font-extrabold">GIẢM {promoDiscountValue}%</p>
-              <p className="text-white/90 text-xs font-medium mt-1">Áp dụng ngay khi mua hàng</p>
+              <p className="text-white text-4xl font-extrabold">{promoTitle}</p>
+              {promoDescription && (
+                <p className="text-white/90 text-xs font-medium mt-1">{promoDescription}</p>
+              )}
             </div>
             <div className="px-6 py-5 space-y-3">
-              <div className="flex items-start gap-3 bg-pink-50 rounded-xl p-3">
-                <span className="text-lg">🎁</span>
-                <div>
-                  <p className="text-sm font-bold text-gray-800">Combo Lắc/Kiềng + Charm</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Mua 1 lắc hoặc kiềng kèm charm bất kỳ</p>
+              {promoItems.filter(i => i.label).map((item, idx) => (
+                <div key={idx} className="flex items-start gap-3 bg-pink-50 rounded-xl p-3">
+                  <span className="text-lg">{PROMO_ICONS[idx % PROMO_ICONS.length]}</span>
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">{item.label}</p>
+                    {item.description && (
+                      <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-3 bg-pink-50 rounded-xl p-3">
-                <span className="text-lg">✨</span>
-                <div>
-                  <p className="text-sm font-bold text-gray-800">Mua từ 3 Charm trở lên</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Áp dụng cho tất cả các loại charm</p>
-                </div>
-              </div>
+              ))}
               <button
                 onClick={() => setShowPromo(false)}
                 className="w-full py-3 rounded-full bg-pink-500 text-white font-bold text-sm hover:bg-pink-600 active:bg-pink-700 transition-colors shadow-sm mt-2"

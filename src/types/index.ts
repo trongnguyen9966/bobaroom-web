@@ -76,7 +76,14 @@ export interface AppSettings {
   defaultShippingFeeEnabled: boolean;
   defaultShippingFee: number;
   catalogPromoEnabled: boolean;
-  catalogPromoDiscountValue: number;
+  catalogPromoTitle: string;
+  catalogPromoDescription: string;
+  catalogPromoItems: CatalogPromoItem[];
+}
+
+export interface CatalogPromoItem {
+  label: string;
+  description: string;
 }
 
 export interface Order {

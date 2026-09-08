@@ -290,12 +290,70 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting("catalogPromoEnabled", v)}
             />
             {settings.catalogPromoEnabled && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <NumberInput
-                  label="Giảm giá (%)"
-                  value={settings.catalogPromoDiscountValue}
-                  onChange={(v) => updateSetting("catalogPromoDiscountValue", v)}
+              <div className="space-y-3 mt-3 pt-3 border-t border-gray-100">
+                <TextInput
+                  label="Tiêu đề"
+                  value={settings.catalogPromoTitle}
+                  placeholder="VD: GIẢM 15%"
+                  onChange={(v) => updateSetting("catalogPromoTitle", v)}
                 />
+                <TextInput
+                  label="Mô tả"
+                  value={settings.catalogPromoDescription}
+                  placeholder="VD: Áp dụng ngay khi mua hàng"
+                  onChange={(v) => updateSetting("catalogPromoDescription", v)}
+                />
+                <div>
+                  <p className="text-sm text-muted font-medium mb-2">Nội dung chi tiết</p>
+                  <div className="space-y-2">
+                    {(settings.catalogPromoItems ?? []).map((item, idx) => (
+                      <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2 relative">
+                        <button
+                          onClick={() => {
+                            const next = settings.catalogPromoItems.filter((_, i) => i !== idx);
+                            updateSetting("catalogPromoItems", next);
+                          }}
+                          className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-50 text-red-400 text-xs flex items-center justify-center hover:bg-red-100"
+                        >
+                          &times;
+                        </button>
+                        <input
+                          type="text"
+                          value={item.label}
+                          onChange={(e) => {
+                            const next = [...settings.catalogPromoItems];
+                            next[idx] = { ...next[idx], label: e.target.value };
+                            setSettings({ ...settings, catalogPromoItems: next });
+                          }}
+                          onBlur={() => updateSetting("catalogPromoItems", settings.catalogPromoItems)}
+                          placeholder="Tiêu đề dòng"
+                          className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        />
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => {
+                            const next = [...settings.catalogPromoItems];
+                            next[idx] = { ...next[idx], description: e.target.value };
+                            setSettings({ ...settings, catalogPromoItems: next });
+                          }}
+                          onBlur={() => updateSetting("catalogPromoItems", settings.catalogPromoItems)}
+                          placeholder="Mô tả dòng"
+                          className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = [...(settings.catalogPromoItems ?? []), { label: "", description: "" }];
+                      updateSetting("catalogPromoItems", next);
+                    }}
+                    className="mt-2 w-full py-2.5 rounded-xl text-sm font-semibold text-primary bg-blue-50 hover:bg-blue-100 transition-colors"
+                  >
+                    + Thêm nội dung
+                  </button>
+                </div>
               </div>
             )}
           </SettingCard>
@@ -373,6 +431,38 @@ function ToggleRow({
           }`}
         />
       </button>
+    </div>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <div>
+      <p className="text-sm text-muted font-medium mb-1">{label}</p>
+      <input
+        type="text"
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => { if (localValue !== value) onChange(localValue); }}
+        placeholder={placeholder}
+        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+      />
     </div>
   );
 }

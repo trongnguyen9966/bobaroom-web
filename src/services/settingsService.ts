@@ -27,7 +27,12 @@ const DEFAULTS: AppSettings = {
   defaultShippingFeeEnabled: false,
   defaultShippingFee: 0,
   catalogPromoEnabled: true,
-  catalogPromoDiscountValue: 15,
+  catalogPromoTitle: 'GIẢM 15%',
+  catalogPromoDescription: 'Áp dụng ngay khi mua hàng',
+  catalogPromoItems: [
+    { label: 'Combo Lắc/Kiềng + Charm', description: 'Mua 1 lắc hoặc kiềng kèm charm bất kỳ' },
+    { label: 'Mua từ 3 Charm trở lên', description: 'Áp dụng cho tất cả các loại charm' },
+  ],
 };
 
 function merge(data: Record<string, unknown>): AppSettings {
