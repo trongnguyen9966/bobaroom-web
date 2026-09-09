@@ -10,6 +10,11 @@ import { imageService } from "@/services/imageService";
 import { ProductCategory } from "@/types";
 import { formatInputNumber, parseNumber } from "@/utils/currency";
 
+/** Pad single-digit suffix: "A1" → "A01", "A12" stays */
+function formatSku(sku: string): string {
+  return sku.replace(/(\D)(\d)$/, "$10$2");
+}
+
 function CreateProductForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -81,7 +86,7 @@ function CreateProductForm() {
 
       const data = {
         name: name.trim(),
-        sku: sku.trim(),
+        sku: formatSku(sku.trim()),
         color: color.trim(),
         size: size.trim(),
         price: parseNumber(price),

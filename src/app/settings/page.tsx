@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { settingsService } from "@/services/settingsService";
+import { productService } from "@/services/productService";
 import { categoryService } from "@/services/categoryService";
 import { authService } from "@/services/authService";
 import { AppSettings, ProductCategory } from "@/types";
@@ -388,6 +389,29 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+          </SettingCard>
+
+          {/* SKU Migration */}
+          <SettingCard title="Chuẩn hóa mã SKU">
+            <p className="text-xs text-muted mb-2">Chuyển mã lẻ 1 số thành 2 số: A1 → A01, B3 → B03</p>
+            <button
+              onClick={async () => {
+                if (!confirm("Cập nhật tất cả SKU có số lẻ thành 2 chữ số?")) return;
+                setSaving("skuMigration");
+                try {
+                  const result = await productService.padAllSkus();
+                  alert(`Đã cập nhật ${result.updated.length} sản phẩm:\n${result.updated.join("\n") || "(không có)"}`);
+                } catch {
+                  alert("Lỗi khi cập nhật SKU");
+                } finally {
+                  setSaving(null);
+                }
+              }}
+              disabled={saving === "skuMigration"}
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50"
+            >
+              {saving === "skuMigration" ? "Đang cập nhật..." : "Cập nhật SKU"}
+            </button>
           </SettingCard>
 
           {/* Logout */}

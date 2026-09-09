@@ -127,6 +127,23 @@ export const productService = {
     await deleteDoc(doc(db, COLLECTION, id));
   },
 
+  /** One-time migration: pad single-digit SKU suffix "A1" → "A01" */
+  async padAllSkus(): Promise<{ updated: string[]; skipped: string[] }> {
+    const all = await productService.getAll();
+    const updated: string[] = [];
+    const skipped: string[] = [];
+    for (const p of all) {
+      const padded = p.sku.replace(/(\D)(\d)$/, '$10$2');
+      if (padded !== p.sku) {
+        await updateDoc(doc(db, COLLECTION, p.id), { sku: padded, updatedAt: Date.now() });
+        updated.push(`${p.sku} → ${padded}`);
+      } else {
+        skipped.push(p.sku);
+      }
+    }
+    return { updated, skipped };
+  },
+
   subscribeToAll(callback: (products: Product[]) => void, categoryId?: string | null): () => void {
     const constraints = categoryId
       ? [orderBy('createdAt', 'desc'), where('categoryId', '==', categoryId)]
