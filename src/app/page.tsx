@@ -309,6 +309,11 @@ export default function CatalogPage() {
           {product.color && (
             <p className="text-[10px] text-pink-400">{product.color}</p>
           )}
+          {(product.sizes ?? []).filter((s) => s.stock > 0).length > 1 && (
+            <p className="text-[10px] text-gray-500">
+              Size: {product.sizes.filter((s) => s.stock > 0).map((s) => s.name).join(" - ")}
+            </p>
+          )}
           <div className="flex items-center justify-between pt-1">
             <div>
               <p className="text-sm font-bold text-pink-600">{formatVND(product.price)}</p>

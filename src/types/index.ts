@@ -19,6 +19,12 @@ export interface ProductCategory {
   createdAt: number;
 }
 
+export interface ProductSize {
+  name: string;
+  price: number;
+  stock: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -33,6 +39,7 @@ export interface Product {
   price: number;
   costPrice: number;
   stock: number;
+  sizes: ProductSize[];
   createdAt: number;
   updatedAt: number;
 }
@@ -49,6 +56,7 @@ export interface CreateProductDTO {
   price: number;
   costPrice: number;
   stock: number;
+  sizes?: ProductSize[];
 }
 
 export type UpdateProductDTO = Partial<CreateProductDTO>;
@@ -138,6 +146,7 @@ export interface OrderItem {
   currentStock: number;
   costPrice: number;
   isExchangeReturn?: boolean;
+  selectedSize?: string;
 }
 
 export interface OrderSummary extends Order {
@@ -185,6 +194,7 @@ export interface CreateOrderDTO {
     productSize?: string;
     productImageUri?: string | null;
     costPrice?: number;
+    selectedSize?: string;
   }[];
 }
 

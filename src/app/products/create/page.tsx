@@ -7,7 +7,7 @@ import { ImagePicker } from "@/components/ui/ImagePicker";
 import { productService } from "@/services/productService";
 import { categoryService } from "@/services/categoryService";
 import { imageService } from "@/services/imageService";
-import { ProductCategory } from "@/types";
+import { ProductCategory, ProductSize } from "@/types";
 import { formatInputNumber, parseNumber } from "@/utils/currency";
 
 /** Pad single-digit suffix: "A1" → "A01", "A12" stays */
@@ -34,6 +34,7 @@ function CreateProductForm() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [sizes, setSizes] = useState<ProductSize[]>([]);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!editId);
@@ -62,6 +63,7 @@ function CreateProductForm() {
       setCategoryId(product.categoryId);
       setCategoryName(product.categoryName);
       setImageUri(product.imageUri);
+      setSizes(product.sizes ?? []);
       setLoading(false);
     })();
   }, [editId, router]);
@@ -84,14 +86,19 @@ function CreateProductForm() {
         setUploadingImage(false);
       }
 
+      const hasSizes = sizes.length > 0;
+      const totalStock = hasSizes ? sizes.reduce((sum, s) => sum + s.stock, 0) : parseNumber(stock);
+      const basePrice = hasSizes && sizes.length > 0 ? sizes[0].price : parseNumber(price);
+
       const data = {
         name: name.trim(),
         sku: formatSku(sku.trim()),
         color: color.trim(),
         size: size.trim(),
-        price: parseNumber(price),
+        price: basePrice,
         costPrice: parseNumber(costPrice),
-        stock: parseNumber(stock),
+        stock: totalStock,
+        sizes: hasSizes ? sizes : [],
         qrCode: qrCode.trim() || null,
         categoryId,
         imageUri: finalImageUri,
@@ -234,36 +241,125 @@ function CreateProductForm() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
         <h3 className="text-sm font-bold text-gray-900">Giá & Tồn kho</h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="text-sm text-muted font-medium">Giá bán (VNĐ)</label>
-            <input
-              value={price ? formatInputNumber(price) : ""}
-              onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="0"
-              className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
+        {sizes.length === 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm text-muted font-medium">Giá bán (VNĐ)</label>
+              <input
+                value={price ? formatInputNumber(price) : ""}
+                onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="0"
+                className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted font-medium">Giá vốn (VNĐ)</label>
+              <input
+                value={costPrice ? formatInputNumber(costPrice) : ""}
+                onChange={(e) => setCostPrice(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="0"
+                className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted font-medium">Tồn kho</label>
+              <input
+                value={stock}
+                onChange={(e) => setStock(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="0"
+                type="text"
+                className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
           </div>
-          <div>
-            <label className="text-sm text-muted font-medium">Giá vốn (VNĐ)</label>
-            <input
-              value={costPrice ? formatInputNumber(costPrice) : ""}
-              onChange={(e) => setCostPrice(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="0"
-              className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm text-muted font-medium">Giá vốn (VNĐ)</label>
+              <input
+                value={costPrice ? formatInputNumber(costPrice) : ""}
+                onChange={(e) => setCostPrice(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="0"
+                className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <p className="text-xs text-muted">Giá bán & tồn kho được quản lý theo từng kích thước bên dưới</p>
           </div>
-          <div>
-            <label className="text-sm text-muted font-medium">Tồn kho</label>
-            <input
-              value={stock}
-              onChange={(e) => setStock(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="0"
-              type="text"
-              className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
+        )}
+      </div>
+
+      {/* Sizes */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+        <h3 className="text-sm font-bold text-gray-900">Kích thước</h3>
+
+        {sizes.length > 0 && (
+          <div className="space-y-2">
+            {sizes.map((s, idx) => (
+              <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2 relative">
+                <button
+                  onClick={() => setSizes(sizes.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-50 text-red-400 text-xs flex items-center justify-center hover:bg-red-100"
+                >
+                  &times;
+                </button>
+                <div>
+                  <label className="text-xs text-muted font-medium">Tên kích thước</label>
+                  <input
+                    value={s.name}
+                    onChange={(e) => {
+                      const next = [...sizes];
+                      next[idx] = { ...next[idx], name: e.target.value };
+                      setSizes(next);
+                    }}
+                    placeholder="VD: size 13"
+                    className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted font-medium">Giá bán (VNĐ)</label>
+                    <input
+                      value={s.price > 0 ? formatInputNumber(String(s.price)) : ""}
+                      onChange={(e) => {
+                        const next = [...sizes];
+                        next[idx] = { ...next[idx], price: parseNumber(e.target.value.replace(/[^\d]/g, "")) };
+                        setSizes(next);
+                      }}
+                      placeholder="0"
+                      className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted font-medium">Tồn kho</label>
+                    <input
+                      value={s.stock > 0 ? String(s.stock) : ""}
+                      onChange={(e) => {
+                        const next = [...sizes];
+                        next[idx] = { ...next[idx], stock: parseNumber(e.target.value.replace(/[^\d]/g, "")) };
+                        setSizes(next);
+                      }}
+                      placeholder="0"
+                      type="text"
+                      className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
+
+        <button
+          onClick={() => setSizes([...sizes, { name: "", price: parseNumber(price) || 0, stock: 0 }])}
+          className="w-full py-2.5 rounded-xl text-sm font-semibold text-primary bg-blue-50 hover:bg-blue-100 transition-colors"
+        >
+          + Thêm kích thước
+        </button>
+        {sizes.length > 0 && (
+          <p className="text-xs text-muted">
+            Tổng tồn kho: {sizes.reduce((sum, s) => sum + s.stock, 0)}
+          </p>
+        )}
       </div>
 
       {/* Save button */}

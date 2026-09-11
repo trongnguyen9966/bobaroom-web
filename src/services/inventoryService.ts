@@ -30,19 +30,40 @@ export const inventoryService = {
       const snaps = await Promise.all(refs.map((r) => tx.get(r)));
 
       for (let i = 0; i < deductible.length; i++) {
-        const stock = snaps[i].exists() ? (snaps[i].data()!.stock as number) : 0;
-        if (stock < deductible[i].quantity) {
-          outOfStockProductIds.push(deductible[i].productId);
+        const data = snaps[i].exists() ? snaps[i].data()! : null;
+        const selectedSize = deductible[i].selectedSize;
+        if (selectedSize && data?.sizes?.length) {
+          const sizeEntry = (data.sizes as Array<{ name: string; stock: number }>).find(
+            (s) => s.name === selectedSize,
+          );
+          if (!sizeEntry || sizeEntry.stock < deductible[i].quantity) {
+            outOfStockProductIds.push(deductible[i].productId);
+          }
+        } else {
+          const stock = data ? (data.stock as number) : 0;
+          if (stock < deductible[i].quantity) {
+            outOfStockProductIds.push(deductible[i].productId);
+          }
         }
       }
 
       if (outOfStockProductIds.length === 0) {
         const now = Date.now();
         for (let i = 0; i < deductible.length; i++) {
-          tx.update(refs[i], {
-            stock: (snaps[i].data()!.stock as number) - deductible[i].quantity,
-            updatedAt: now,
-          });
+          const data = snaps[i].data()!;
+          const selectedSize = deductible[i].selectedSize;
+          if (selectedSize && data.sizes?.length) {
+            const sizes = [...(data.sizes as Array<{ name: string; price: number; stock: number }>)];
+            const idx = sizes.findIndex((s) => s.name === selectedSize);
+            sizes[idx] = { ...sizes[idx], stock: sizes[idx].stock - deductible[i].quantity };
+            const totalStock = sizes.reduce((sum, s) => sum + s.stock, 0);
+            tx.update(refs[i], { sizes, stock: totalStock, updatedAt: now });
+          } else {
+            tx.update(refs[i], {
+              stock: (data.stock as number) - deductible[i].quantity,
+              updatedAt: now,
+            });
+          }
         }
       }
     });
@@ -62,9 +83,20 @@ export const inventoryService = {
       const snaps = await Promise.all(refs.map((r) => tx.get(r)));
       const now = Date.now();
       for (let i = 0; i < restorable.length; i++) {
-        if (snaps[i].exists()) {
+        if (!snaps[i].exists()) continue;
+        const data = snaps[i].data()!;
+        const selectedSize = restorable[i].selectedSize;
+        if (selectedSize && data.sizes?.length) {
+          const sizes = [...(data.sizes as Array<{ name: string; price: number; stock: number }>)];
+          const idx = sizes.findIndex((s) => s.name === selectedSize);
+          if (idx >= 0) {
+            sizes[idx] = { ...sizes[idx], stock: sizes[idx].stock + restorable[i].quantity };
+            const totalStock = sizes.reduce((sum, s) => sum + s.stock, 0);
+            tx.update(refs[i], { sizes, stock: totalStock, updatedAt: now });
+          }
+        } else {
           tx.update(refs[i], {
-            stock: (snaps[i].data()!.stock as number) + restorable[i].quantity,
+            stock: (data.stock as number) + restorable[i].quantity,
             updatedAt: now,
           });
         }

@@ -30,6 +30,7 @@ interface DraftItem {
   product: Product;
   quantity: number;
   isGift: boolean;
+  selectedSize?: string;
 }
 
 const ORDER_TYPES: { value: OrderType; label: string }[] = [
@@ -129,14 +130,17 @@ function CreateOrderForm() {
           categoryName: null,
           qrCode: null,
           imageUri: i.productImageUri,
+          realImageUris: [],
           price: i.unitPrice,
           costPrice: i.costPrice,
           stock: i.currentStock,
+          sizes: [],
           createdAt: 0,
           updatedAt: 0,
         } as Product,
         quantity: i.quantity,
         isGift: i.isGift,
+        selectedSize: i.selectedSize,
       }));
       setItems(allItems.filter((i) => !i.isGift));
       setGiftItems(allItems.filter((i) => i.isGift));
@@ -155,32 +159,34 @@ function CreateOrderForm() {
   }, [editId, router]);
 
   // Handlers
-  const handlePickerConfirm = (selections: { product: Product; quantity: number }[]) => {
-    setItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: false })));
+  const handlePickerConfirm = (selections: { product: Product; quantity: number; selectedSize?: string }[]) => {
+    setItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: false, selectedSize: s.selectedSize })));
   };
 
-  const handleGiftPickerConfirm = (selections: { product: Product; quantity: number }[]) => {
-    setGiftItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: true })));
+  const handleGiftPickerConfirm = (selections: { product: Product; quantity: number; selectedSize?: string }[]) => {
+    setGiftItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: true, selectedSize: s.selectedSize })));
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const itemKey = (item: DraftItem) => item.selectedSize ? `${item.product.id}::${item.selectedSize}` : item.product.id;
+
+  const updateQuantity = (key: string, delta: number) => {
     setItems((prev) =>
-      prev.map((i) => i.product.id === productId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i),
+      prev.map((i) => itemKey(i) === key ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i),
     );
   };
 
-  const removeItem = (productId: string) => {
-    setItems((prev) => prev.filter((i) => i.product.id !== productId));
+  const removeItem = (key: string) => {
+    setItems((prev) => prev.filter((i) => itemKey(i) !== key));
   };
 
-  const updateGiftQuantity = (productId: string, delta: number) => {
+  const updateGiftQuantity = (key: string, delta: number) => {
     setGiftItems((prev) =>
-      prev.map((i) => i.product.id === productId ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i),
+      prev.map((i) => itemKey(i) === key ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i),
     );
   };
 
-  const removeGiftItem = (productId: string) => {
-    setGiftItems((prev) => prev.filter((i) => i.product.id !== productId));
+  const removeGiftItem = (key: string) => {
+    setGiftItems((prev) => prev.filter((i) => itemKey(i) !== key));
   };
 
   const handleAutoFill = (text: string) => {
@@ -213,7 +219,13 @@ function CreateOrderForm() {
 
   // Calculations
   const allItems = [...items, ...giftItems];
-  const subtotal = items.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const getItemPrice = (item: DraftItem) => {
+    if (item.selectedSize) {
+      return item.product.sizes?.find((s) => s.name === item.selectedSize)?.price ?? item.product.price;
+    }
+    return item.product.price;
+  };
+  const subtotal = items.reduce((s, i) => s + getItemPrice(i) * i.quantity, 0);
   const discountNum = parseNumber(discountValue);
   const discountAmount = discountType === "percent" ? subtotal * (discountNum / 100) : discountNum;
   const shippingNum = parseNumber(shippingFee);
@@ -265,19 +277,25 @@ function CreateOrderForm() {
         platformFeeType,
         platformFeeValue: platformFeeNum,
         deposit: depositNum,
-        items: allItems.map((i) => ({
-          productId: i.product.id,
-          quantity: i.quantity,
-          unitPrice: i.isGift ? 0 : i.product.price,
-          originalUnitPrice: i.isGift ? 0 : i.product.price,
-          isGift: i.isGift,
-          productName: i.product.name,
-          productSku: i.product.sku,
-          productColor: i.product.color,
-          productSize: i.product.size,
-          productImageUri: i.product.imageUri,
-          costPrice: i.product.costPrice,
-        })),
+        items: allItems.map((i) => {
+          const sizePrice = i.selectedSize
+            ? (i.product.sizes?.find((s) => s.name === i.selectedSize)?.price ?? i.product.price)
+            : i.product.price;
+          return {
+            productId: i.product.id,
+            quantity: i.quantity,
+            unitPrice: i.isGift ? 0 : sizePrice,
+            originalUnitPrice: i.isGift ? 0 : sizePrice,
+            isGift: i.isGift,
+            productName: i.product.name,
+            productSku: i.product.sku,
+            productColor: i.product.color,
+            productSize: i.selectedSize || i.product.size,
+            productImageUri: i.product.imageUri,
+            costPrice: i.product.costPrice,
+            selectedSize: i.selectedSize,
+          };
+        }),
       };
 
       if (editId) {
@@ -462,58 +480,62 @@ function CreateOrderForm() {
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {items.map((item) => (
-              <div key={item.product.id} className="px-5 py-3 flex items-start gap-3">
-                {item.product.imageUri ? (
-                  <img
-                    src={item.product.imageUri}
-                    alt={item.product.name}
-                    className="w-10 h-10 rounded-lg object-cover bg-gray-100 shrink-0"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                    <span className="text-gray-400 text-xs">📦</span>
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.product.name}</p>
-                  <p className="text-xs text-muted">
-                    {[item.product.color, item.product.size].filter(Boolean).join(" | ")}
-                  </p>
-                  <p className="text-xs text-primary font-semibold mt-0.5">
-                    {formatVND(item.product.price)}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <div className="flex items-center border border-gray-200 rounded-lg">
+            {items.map((item) => {
+              const key = itemKey(item);
+              const price = getItemPrice(item);
+              return (
+                <div key={key} className="px-5 py-3 flex items-start gap-3">
+                  {item.product.imageUri ? (
+                    <img
+                      src={item.product.imageUri}
+                      alt={item.product.name}
+                      className="w-10 h-10 rounded-lg object-cover bg-gray-100 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                      <span className="text-gray-400 text-xs">📦</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{item.product.name}</p>
+                    <p className="text-xs text-muted">
+                      {[item.product.color, item.selectedSize || item.product.size].filter(Boolean).join(" | ")}
+                    </p>
+                    <p className="text-xs text-primary font-semibold mt-0.5">
+                      {formatVND(price)}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <div className="flex items-center border border-gray-200 rounded-lg">
+                        <button
+                          onClick={() => updateQuantity(key, -1)}
+                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                        >
+                          -
+                        </button>
+                        <span className="px-2 text-sm font-semibold min-w-[24px] text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateQuantity(key, 1)}
+                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                        >
+                          +
+                        </button>
+                      </div>
                       <button
-                        onClick={() => updateQuantity(item.product.id, -1)}
-                        className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                        onClick={() => removeItem(key)}
+                        className="text-xs text-red-400 hover:text-red-600"
                       >
-                        -
-                      </button>
-                      <span className="px-2 text-sm font-semibold min-w-[24px] text-center">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQuantity(item.product.id, 1)}
-                        className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
-                      >
-                        +
+                        Xóa
                       </button>
                     </div>
-                    <button
-                      onClick={() => removeItem(item.product.id)}
-                      className="text-xs text-red-400 hover:text-red-600"
-                    >
-                      Xóa
-                    </button>
                   </div>
+                  <span className="text-sm font-semibold text-gray-900 shrink-0">
+                    {formatVND(price * item.quantity)}
+                  </span>
                 </div>
-                <span className="text-sm font-semibold text-gray-900 shrink-0">
-                  {formatVND(item.product.price * item.quantity)}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -543,53 +565,56 @@ function CreateOrderForm() {
             </div>
           ) : (
             <div className="divide-y divide-green-50">
-              {giftItems.map((item) => (
-                <div key={item.product.id} className="px-5 py-3 flex items-start gap-3">
-                  {item.product.imageUri ? (
-                    <img
-                      src={item.product.imageUri}
-                      alt={item.product.name}
-                      className="w-10 h-10 rounded-lg object-cover bg-gray-100 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                      <span className="text-gray-400 text-xs">🎁</span>
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{item.product.name}</p>
-                    <p className="text-xs text-muted">
-                      {[item.product.color, item.product.size].filter(Boolean).join(" | ")}
-                    </p>
-                    <p className="text-xs text-green-600 font-semibold mt-0.5">Quà tặng</p>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <div className="flex items-center border border-gray-200 rounded-lg">
+              {giftItems.map((item) => {
+                const key = itemKey(item);
+                return (
+                  <div key={key} className="px-5 py-3 flex items-start gap-3">
+                    {item.product.imageUri ? (
+                      <img
+                        src={item.product.imageUri}
+                        alt={item.product.name}
+                        className="w-10 h-10 rounded-lg object-cover bg-gray-100 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                        <span className="text-gray-400 text-xs">🎁</span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{item.product.name}</p>
+                      <p className="text-xs text-muted">
+                        {[item.product.color, item.selectedSize || item.product.size].filter(Boolean).join(" | ")}
+                      </p>
+                      <p className="text-xs text-green-600 font-semibold mt-0.5">Quà tặng</p>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <div className="flex items-center border border-gray-200 rounded-lg">
+                          <button
+                            onClick={() => updateGiftQuantity(key, -1)}
+                            className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                          >
+                            -
+                          </button>
+                          <span className="px-2 text-sm font-semibold min-w-[24px] text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateGiftQuantity(key, 1)}
+                            className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                          >
+                            +
+                          </button>
+                        </div>
                         <button
-                          onClick={() => updateGiftQuantity(item.product.id, -1)}
-                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
+                          onClick={() => removeGiftItem(key)}
+                          className="text-xs text-red-400 hover:text-red-600"
                         >
-                          -
-                        </button>
-                        <span className="px-2 text-sm font-semibold min-w-[24px] text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateGiftQuantity(item.product.id, 1)}
-                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-50 text-sm"
-                        >
-                          +
+                          Xóa
                         </button>
                       </div>
-                      <button
-                        onClick={() => removeGiftItem(item.product.id)}
-                        className="text-xs text-red-400 hover:text-red-600"
-                      >
-                        Xóa
-                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -808,14 +833,14 @@ function CreateOrderForm() {
         open={pickerVisible}
         onClose={() => setPickerVisible(false)}
         onConfirm={handlePickerConfirm}
-        initialSelections={items.map((i) => ({ product: i.product, quantity: i.quantity }))}
+        initialSelections={items.map((i) => ({ product: i.product, quantity: i.quantity, selectedSize: i.selectedSize }))}
       />
 
       <ProductPickerModal
         open={giftPickerVisible}
         onClose={() => setGiftPickerVisible(false)}
         onConfirm={handleGiftPickerConfirm}
-        initialSelections={giftItems.map((i) => ({ product: i.product, quantity: i.quantity }))}
+        initialSelections={giftItems.map((i) => ({ product: i.product, quantity: i.quantity, selectedSize: i.selectedSize }))}
       />
 
       <AddressPickerModal

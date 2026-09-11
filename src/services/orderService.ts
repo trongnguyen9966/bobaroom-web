@@ -42,6 +42,7 @@ interface StoredItem {
   productImageUri: string | null;
   costPrice: number;
   isExchangeReturn?: boolean;
+  selectedSize?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,6 +101,7 @@ function mapStoredItem(raw: StoredItem, orderId: string): OrderItem {
     currentStock: 0,
     costPrice: raw.costPrice ?? 0,
     isExchangeReturn: raw.isExchangeReturn ?? false,
+    selectedSize: raw.selectedSize,
   };
 }
 
@@ -178,6 +180,7 @@ export const orderService = {
       productSize: item.productSize ?? '',
       productImageUri: item.productImageUri ?? null,
       costPrice: item.costPrice ?? 0,
+      selectedSize: item.selectedSize,
     }));
 
     const orderDoc = {
@@ -273,10 +276,14 @@ export const orderService = {
     const now = Date.now();
     const snap = await getDoc(doc(db, ORDERS, id));
     const existingItems: StoredItem[] = snap.data()?.items ?? [];
-    const existingMap = new Map(existingItems.map((i) => [i.productId, i]));
+    const existingMap = new Map(existingItems.map((i) => {
+      const key = i.selectedSize ? `${i.productId}::${i.selectedSize}` : i.productId;
+      return [key, i];
+    }));
 
     const items: StoredItem[] = data.items.map((item) => {
-      const prev = existingMap.get(item.productId);
+      const key = item.selectedSize ? `${item.productId}::${item.selectedSize}` : item.productId;
+      const prev = existingMap.get(key);
       return {
         id: prev?.id ?? generateId(),
         productId: item.productId,
@@ -292,6 +299,7 @@ export const orderService = {
         productImageUri: item.productImageUri ?? prev?.productImageUri ?? null,
         costPrice: item.costPrice ?? prev?.costPrice ?? 0,
         isExchangeReturn: prev?.isExchangeReturn ?? false,
+        selectedSize: item.selectedSize ?? prev?.selectedSize,
       };
     });
 

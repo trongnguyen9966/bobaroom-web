@@ -35,6 +35,7 @@ function mapDoc(snap: { id: string; data(): Record<string, any> | undefined }): 
     price: d.price,
     costPrice: d.costPrice ?? 0,
     stock: d.stock,
+    sizes: d.sizes ?? [],
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   };
@@ -82,6 +83,7 @@ export const productService = {
       price: data.price,
       costPrice: data.costPrice ?? 0,
       stock: data.stock,
+      sizes: data.sizes ?? [],
       createdAt: now,
       updatedAt: now,
     };
@@ -100,6 +102,7 @@ export const productService = {
       price: data.price,
       costPrice: data.costPrice ?? 0,
       stock: data.stock,
+      sizes: data.sizes ?? [],
       createdAt: now,
       updatedAt: now,
     };
@@ -120,6 +123,7 @@ export const productService = {
     if (data.price !== undefined) updates.price = data.price;
     if (data.costPrice !== undefined) updates.costPrice = data.costPrice;
     if (data.stock !== undefined) updates.stock = data.stock;
+    if (data.sizes !== undefined) updates.sizes = data.sizes;
     await updateDoc(doc(db, COLLECTION, id), updates);
   },
 
