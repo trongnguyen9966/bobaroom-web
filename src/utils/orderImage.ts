@@ -318,7 +318,7 @@ function drawItemRow(
   d.y += 18;
 
   // Details (color | size - SKU)
-  const detail = [item.productColor, item.productSize].filter(Boolean).join(" | ");
+  const detail = [item.productColor, item.selectedSize || item.productSize].filter(Boolean).join(" | ");
   const sku = item.productSku ? ` - ${item.productSku}` : "";
   if (detail || sku) {
     setFont(ctx, 12, false);

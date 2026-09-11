@@ -180,7 +180,7 @@ export const orderService = {
       productSize: item.productSize ?? '',
       productImageUri: item.productImageUri ?? null,
       costPrice: item.costPrice ?? 0,
-      selectedSize: item.selectedSize,
+      selectedSize: item.selectedSize || undefined,
     }));
 
     const orderDoc = {
@@ -299,7 +299,7 @@ export const orderService = {
         productImageUri: item.productImageUri ?? prev?.productImageUri ?? null,
         costPrice: item.costPrice ?? prev?.costPrice ?? 0,
         isExchangeReturn: prev?.isExchangeReturn ?? false,
-        selectedSize: item.selectedSize ?? prev?.selectedSize,
+        selectedSize: item.selectedSize || prev?.selectedSize || undefined,
       };
     });
 
@@ -347,14 +347,19 @@ export const orderService = {
     productId: string,
     quantity: number,
     unitPrice: number,
-    productInfo?: { name: string; sku: string; color: string; size: string; imageUri: string | null; costPrice: number },
+    productInfo?: { name: string; sku: string; color: string; size: string; imageUri: string | null; costPrice: number; selectedSize?: string },
   ): Promise<void> {
     const ref = doc(db, ORDERS, orderId);
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
       const items: StoredItem[] = snap.data()?.items ?? [];
       const now = Date.now();
-      const idx = items.findIndex((i) => i.productId === productId);
+      const selectedSize = productInfo?.selectedSize;
+      const key = selectedSize ? `${productId}::${selectedSize}` : productId;
+      const idx = items.findIndex((i) => {
+        const iKey = i.selectedSize ? `${i.productId}::${i.selectedSize}` : i.productId;
+        return iKey === key;
+      });
       if (idx >= 0) {
         items[idx] = { ...items[idx], quantity: items[idx].quantity + quantity, unitPrice };
       } else {
@@ -369,9 +374,10 @@ export const orderService = {
           productName: productInfo?.name ?? '',
           productSku: productInfo?.sku ?? '',
           productColor: productInfo?.color ?? '',
-          productSize: productInfo?.size ?? '',
+          productSize: selectedSize || productInfo?.size || '',
           productImageUri: productInfo?.imageUri ?? null,
           costPrice: productInfo?.costPrice ?? 0,
+          selectedSize,
         });
       }
       tx.update(ref, { items, updatedAt: now });
@@ -633,7 +639,7 @@ export const orderService = {
   async createExchangeOrder(
     mainOrderId: string,
     mainOrder: { customerName: string; customerPhone: string; customerAddress: string; notes: string; paymentMethod: string | null },
-    oldItems: { id: string; productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number }[],
+    oldItems: { id: string; productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number; selectedSize?: string }[],
     newItems: { productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number; selectedSize?: string }[],
     exchangeCost: number,
     priceDiff: number,
@@ -657,6 +663,7 @@ export const orderService = {
         productImageUri: i.productImageUri,
         costPrice: i.costPrice,
         isExchangeReturn: true,
+        selectedSize: i.selectedSize,
       })),
       ...newItems.map((ni) => ({
         id: generateId(),

@@ -424,7 +424,7 @@ export default function OrderDetailPage() {
       const exchangeOrderId = await orderService.createExchangeOrder(
         order.id,
         { customerName: order.customerName, customerPhone: order.customerPhone, customerAddress: order.customerAddress, notes: order.notes, paymentMethod: order.paymentMethod },
-        capturedOldItemsData.map((i) => ({ id: i.id, productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, productName: i.productName, productColor: i.productColor, productSize: i.productSize, productImageUri: i.productImageUri, costPrice: i.costPrice })),
+        capturedOldItemsData.map((i) => ({ id: i.id, productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, productName: i.productName, productColor: i.productColor, productSize: i.selectedSize || i.productSize, productImageUri: i.productImageUri, costPrice: i.costPrice, selectedSize: i.selectedSize })),
         exchangeNewProducts.map((e) => {
           const price = getExchangeItemPrice(e);
           return { productId: e.product.id, quantity: 1, unitPrice: price, productName: e.product.name, productColor: e.product.color, productSize: e.selectedSize || e.product.size, productImageUri: e.product.imageUri, costPrice: e.product.costPrice, selectedSize: e.selectedSize };
@@ -685,7 +685,7 @@ export default function OrderDetailPage() {
                   )}
                 </p>
                 <p className="text-xs text-muted">
-                  {[item.productColor, item.productSize].filter(Boolean).join(" | ")}
+                  {[item.productColor, item.selectedSize || item.productSize].filter(Boolean).join(" | ")}
                   {item.productSku ? ` - ${item.productSku}` : ""}
                 </p>
                 {item.isGift && (

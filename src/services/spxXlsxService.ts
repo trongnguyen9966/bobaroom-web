@@ -46,7 +46,7 @@ export async function exportSPXToXlsx(orderIds: string[]): Promise<{ count: numb
     const items = order.items.filter((i) => !i.isGift && !i.isExchangeReturn);
 
     const productNames = items.map((item) => {
-      const label = [item.productName, item.productColor, item.productSize]
+      const label = [item.productName, item.productColor, item.selectedSize || item.productSize]
         .filter(Boolean).join(' - ');
       return item.quantity > 1 ? `${label} x${item.quantity}` : label;
     }).join(', ');

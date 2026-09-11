@@ -6,6 +6,7 @@ import { ProductPickerModal } from "@/components/orders/ProductPickerModal";
 import { AddressPickerModal } from "@/components/orders/AddressPickerModal";
 import { AutoFillModal } from "@/components/orders/AutoFillModal";
 import { orderService } from "@/services/orderService";
+import { productService } from "@/services/productService";
 import { settingsService } from "@/services/settingsService";
 import {
   lookupAddress,
@@ -119,29 +120,41 @@ function CreateOrderForm() {
       setPlatformFeeType(order.platformFeeType ?? "percent");
       setPlatformFeeValue(order.platformFeeValue > 0 ? String(order.platformFeeValue) : "");
       setDeposit(order.deposit > 0 ? String(order.deposit) : "");
-      const allItems = order.items.map((i) => ({
-        product: {
-          id: i.productId,
-          name: i.productName,
-          sku: i.productSku,
-          color: i.productColor,
-          size: i.productSize,
-          categoryId: null,
-          categoryName: null,
-          qrCode: null,
-          imageUri: i.productImageUri,
-          realImageUris: [],
-          price: i.unitPrice,
-          costPrice: i.costPrice,
-          stock: i.currentStock,
-          sizes: [],
-          createdAt: 0,
-          updatedAt: 0,
-        } as Product,
-        quantity: i.quantity,
-        isGift: i.isGift,
-        selectedSize: i.selectedSize,
-      }));
+      // Fetch real product data for sizes/stock
+      const uniqueProductIds = [...new Set(order.items.map((i) => i.productId))];
+      const productMap = new Map<string, Product>();
+      await Promise.all(
+        uniqueProductIds.map(async (pid) => {
+          const p = await productService.getById(pid);
+          if (p) productMap.set(pid, p);
+        }),
+      );
+      const allItems = order.items.map((i) => {
+        const realProduct = productMap.get(i.productId);
+        return {
+          product: realProduct ?? {
+            id: i.productId,
+            name: i.productName,
+            sku: i.productSku,
+            color: i.productColor,
+            size: i.productSize,
+            categoryId: null,
+            categoryName: null,
+            qrCode: null,
+            imageUri: i.productImageUri,
+            realImageUris: [],
+            price: i.unitPrice,
+            costPrice: i.costPrice,
+            stock: 0,
+            sizes: [],
+            createdAt: 0,
+            updatedAt: 0,
+          } as Product,
+          quantity: i.quantity,
+          isGift: i.isGift,
+          selectedSize: i.selectedSize,
+        };
+      });
       setItems(allItems.filter((i) => !i.isGift));
       setGiftItems(allItems.filter((i) => i.isGift));
       setLoading(false);
@@ -181,6 +194,10 @@ function CreateOrderForm() {
 
   const setItemSize = (productId: string, sizeName: string) => {
     setItems((prev) => prev.map((i) => i.product.id === productId ? { ...i, selectedSize: sizeName } : i));
+  };
+
+  const setGiftItemSize = (productId: string, sizeName: string) => {
+    setGiftItems((prev) => prev.map((i) => i.product.id === productId ? { ...i, selectedSize: sizeName } : i));
   };
 
   const itemKey = (item: DraftItem) => item.selectedSize ? `${item.product.id}::${item.selectedSize}` : item.product.id;
@@ -273,7 +290,7 @@ function CreateOrderForm() {
       alert("Vui lòng nhập tên khách hàng");
       return;
     }
-    const missingSizeItem = items.find((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
+    const missingSizeItem = [...items, ...giftItems].find((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
     if (missingSizeItem) {
       alert(`Vui lòng chọn size cho "${missingSizeItem.product.name}"`);
       return;
@@ -314,7 +331,7 @@ function CreateOrderForm() {
             productSize: i.selectedSize || i.product.size,
             productImageUri: i.product.imageUri,
             costPrice: i.product.costPrice,
-            selectedSize: i.selectedSize,
+            selectedSize: i.selectedSize || undefined,
           };
         }),
       };
@@ -627,6 +644,25 @@ function CreateOrderForm() {
                         {[item.product.color, item.selectedSize || item.product.size].filter(Boolean).join(" | ")}
                       </p>
                       <p className="text-xs text-green-600 font-semibold mt-0.5">Quà tặng</p>
+                      {(item.product.sizes ?? []).length > 0 && (
+                        <select
+                          value={item.selectedSize ?? ""}
+                          onChange={(e) => setGiftItemSize(item.product.id, e.target.value)}
+                          className={`mt-1.5 w-full text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors appearance-none bg-no-repeat bg-[length:12px] bg-[right_8px_center] ${
+                            item.selectedSize
+                              ? "bg-green-50 text-green-700 border-green-400"
+                              : "bg-gray-50 text-gray-500 border-amber-400"
+                          }`}
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")` }}
+                        >
+                          <option value="" disabled>Chọn size...</option>
+                          {item.product.sizes.filter((s) => s.stock > 0).map((s) => (
+                            <option key={s.name} value={s.name}>
+                              {s.name} — tồn: {s.stock}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <div className="flex items-center gap-3 mt-1.5">
                         <div className="flex items-center border border-gray-200 rounded-lg">
                           <button
