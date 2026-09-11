@@ -333,6 +333,28 @@ export default function ProductDetailPage() {
                 </span>
               </div>
             </div>
+
+            {product.sizes && product.sizes.length > 0 && (
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-semibold text-muted uppercase tracking-wide">Theo kích thước</h4>
+                <div className="space-y-1">
+                  {product.sizes.map((s) => (
+                    <div key={s.name} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                      <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-muted">{formatVND(s.price)}</span>
+                        <span className={`text-sm font-bold ${s.stock === 0 ? "text-red-500" : s.stock <= 3 ? "text-amber-500" : "text-gray-900"}`}>
+                          {s.stock}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted text-right">
+                  Tổng: {product.sizes.reduce((sum, s) => sum + s.stock, 0)}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Actions */}
