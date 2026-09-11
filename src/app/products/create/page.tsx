@@ -36,6 +36,7 @@ function CreateProductForm() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [sizes, setSizes] = useState<ProductSize[]>([]);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [bulkPrice, setBulkPrice] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!editId);
 
@@ -200,15 +201,6 @@ function CreateProductForm() {
               className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
           </div>
-          <div>
-            <label className="text-sm text-muted font-medium">Kích thước</label>
-            <input
-              value={size}
-              onChange={(e) => setSize(e.target.value)}
-              placeholder="Size"
-              className="mt-1 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
-          </div>
         </div>
       </div>
 
@@ -291,6 +283,33 @@ function CreateProductForm() {
       {/* Sizes */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
         <h3 className="text-sm font-bold text-gray-900">Kích thước</h3>
+
+        {sizes.length > 0 && (
+          <div>
+            <label className="text-xs text-muted font-medium">Chỉnh giá hàng loạt (VNĐ)</label>
+            <div className="flex gap-2 mt-1">
+              <input
+                value={bulkPrice ? formatInputNumber(bulkPrice) : ""}
+                onChange={(e) => setBulkPrice(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="Nhập giá áp dụng cho tất cả size"
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+              <button
+                onClick={() => {
+                  const p = parseNumber(bulkPrice);
+                  if (p > 0) {
+                    setSizes(sizes.map((s) => ({ ...s, price: p })));
+                    setBulkPrice("");
+                  }
+                }}
+                disabled={!bulkPrice || parseNumber(bulkPrice) <= 0}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary-hover disabled:opacity-40 shrink-0"
+              >
+                Áp dụng
+              </button>
+            </div>
+          </div>
+        )}
 
         {sizes.length > 0 && (
           <div className="space-y-2">
