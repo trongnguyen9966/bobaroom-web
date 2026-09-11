@@ -159,12 +159,28 @@ function CreateOrderForm() {
   }, [editId, router]);
 
   // Handlers
-  const handlePickerConfirm = (selections: { product: Product; quantity: number; selectedSize?: string }[]) => {
-    setItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: false, selectedSize: s.selectedSize })));
+  const handlePickerConfirm = (selections: { product: Product; quantity: number }[]) => {
+    setItems((prev) => {
+      // Keep items that are still selected, update quantities
+      const selectedMap = new Map(selections.map((s) => [s.product.id, s]));
+      const kept = prev.filter((i) => selectedMap.has(i.product.id)).map((i) => {
+        const sel = selectedMap.get(i.product.id)!;
+        return { ...i, product: sel.product, quantity: sel.quantity };
+      });
+      const keptIds = new Set(kept.map((i) => i.product.id));
+      const added = selections
+        .filter((s) => !keptIds.has(s.product.id))
+        .map((s) => ({ product: s.product, quantity: s.quantity, isGift: false as const, selectedSize: undefined as string | undefined }));
+      return [...kept, ...added];
+    });
   };
 
-  const handleGiftPickerConfirm = (selections: { product: Product; quantity: number; selectedSize?: string }[]) => {
-    setGiftItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: true, selectedSize: s.selectedSize })));
+  const handleGiftPickerConfirm = (selections: { product: Product; quantity: number }[]) => {
+    setGiftItems(selections.map((s) => ({ product: s.product, quantity: s.quantity, isGift: true as const })));
+  };
+
+  const setItemSize = (productId: string, sizeName: string) => {
+    setItems((prev) => prev.map((i) => i.product.id === productId ? { ...i, selectedSize: sizeName } : i));
   };
 
   const itemKey = (item: DraftItem) => item.selectedSize ? `${item.product.id}::${item.selectedSize}` : item.product.id;
@@ -255,6 +271,11 @@ function CreateOrderForm() {
   const handleSave = async () => {
     if (!customerName.trim()) {
       alert("Vui lòng nhập tên khách hàng");
+      return;
+    }
+    const missingSizeItem = items.find((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
+    if (missingSizeItem) {
+      alert(`Vui lòng chọn size cho "${missingSizeItem.product.name}"`);
       return;
     }
 
@@ -504,6 +525,27 @@ function CreateOrderForm() {
                     <p className="text-xs text-primary font-semibold mt-0.5">
                       {formatVND(price)}
                     </p>
+                    {/* Size selector for sized products */}
+                    {(item.product.sizes ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {item.product.sizes.filter((s) => s.stock > 0).map((s) => (
+                          <button
+                            key={s.name}
+                            onClick={() => setItemSize(item.product.id, s.name)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              item.selectedSize === s.name
+                                ? "bg-primary text-white border-primary"
+                                : "bg-gray-50 text-gray-600 border-gray-200 hover:border-primary hover:text-primary"
+                            }`}
+                          >
+                            {s.name} ({s.stock})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {(item.product.sizes ?? []).length > 0 && !item.selectedSize && (
+                      <p className="text-[10px] text-amber-500 mt-1">Vui lòng chọn size</p>
+                    )}
                     <div className="flex items-center gap-3 mt-1.5">
                       <div className="flex items-center border border-gray-200 rounded-lg">
                         <button
@@ -833,14 +875,14 @@ function CreateOrderForm() {
         open={pickerVisible}
         onClose={() => setPickerVisible(false)}
         onConfirm={handlePickerConfirm}
-        initialSelections={items.map((i) => ({ product: i.product, quantity: i.quantity, selectedSize: i.selectedSize }))}
+        initialSelections={items.map((i) => ({ product: i.product, quantity: i.quantity }))}
       />
 
       <ProductPickerModal
         open={giftPickerVisible}
         onClose={() => setGiftPickerVisible(false)}
         onConfirm={handleGiftPickerConfirm}
-        initialSelections={giftItems.map((i) => ({ product: i.product, quantity: i.quantity, selectedSize: i.selectedSize }))}
+        initialSelections={giftItems.map((i) => ({ product: i.product, quantity: i.quantity }))}
       />
 
       <AddressPickerModal
