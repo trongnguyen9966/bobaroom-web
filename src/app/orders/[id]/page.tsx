@@ -1080,23 +1080,24 @@ export default function OrderDetailPage() {
                       </div>
                     </button>
                     {selected && hasSizes && (
-                      <div className="px-3 pb-2 flex flex-wrap gap-1.5 mt-1">
-                        {product.sizes.filter((s) => s.stock > 0).map((s) => (
-                          <button
-                            key={s.name}
-                            onClick={() => setExchangeProductSize(product.id, s.name)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                              entry?.selectedSize === s.name
-                                ? "bg-green-600 text-white border-green-600"
-                                : "bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400"
-                            }`}
-                          >
-                            {s.name} ({s.stock})
-                          </button>
-                        ))}
-                        {!entry?.selectedSize && (
-                          <span className="text-[10px] text-amber-500 self-center ml-1">Chọn size</span>
-                        )}
+                      <div className="px-3 pb-2 mt-1">
+                        <select
+                          value={entry?.selectedSize ?? ""}
+                          onChange={(e) => setExchangeProductSize(product.id, e.target.value)}
+                          className={`w-full text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors appearance-none bg-no-repeat bg-[length:12px] bg-[right_8px_center] ${
+                            entry?.selectedSize
+                              ? "bg-green-50 text-green-700 border-green-500"
+                              : "bg-gray-50 text-gray-500 border-amber-400"
+                          }`}
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")` }}
+                        >
+                          <option value="" disabled>Chọn size...</option>
+                          {product.sizes.filter((s) => s.stock > 0).map((s) => (
+                            <option key={s.name} value={s.name}>
+                              {s.name} — tồn: {s.stock} — {formatVND(s.price)}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     )}
                   </div>

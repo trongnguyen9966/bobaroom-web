@@ -525,26 +525,25 @@ function CreateOrderForm() {
                     <p className="text-xs text-primary font-semibold mt-0.5">
                       {formatVND(price)}
                     </p>
-                    {/* Size selector for sized products */}
+                    {/* Size selector dropdown for sized products */}
                     {(item.product.sizes ?? []).length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <select
+                        value={item.selectedSize ?? ""}
+                        onChange={(e) => setItemSize(item.product.id, e.target.value)}
+                        className={`mt-1.5 w-full text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors appearance-none bg-no-repeat bg-[length:12px] bg-[right_8px_center] ${
+                          item.selectedSize
+                            ? "bg-blue-50 text-primary border-primary"
+                            : "bg-gray-50 text-gray-500 border-amber-400"
+                        }`}
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")` }}
+                      >
+                        <option value="" disabled>Chọn size...</option>
                         {item.product.sizes.filter((s) => s.stock > 0).map((s) => (
-                          <button
-                            key={s.name}
-                            onClick={() => setItemSize(item.product.id, s.name)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                              item.selectedSize === s.name
-                                ? "bg-primary text-white border-primary"
-                                : "bg-gray-50 text-gray-600 border-gray-200 hover:border-primary hover:text-primary"
-                            }`}
-                          >
-                            {s.name} ({s.stock})
-                          </button>
+                          <option key={s.name} value={s.name}>
+                            {s.name} — tồn: {s.stock} — {formatVND(s.price)}
+                          </option>
                         ))}
-                      </div>
-                    )}
-                    {(item.product.sizes ?? []).length > 0 && !item.selectedSize && (
-                      <p className="text-[10px] text-amber-500 mt-1">Vui lòng chọn size</p>
+                      </select>
                     )}
                     <div className="flex items-center gap-3 mt-1.5">
                       <div className="flex items-center border border-gray-200 rounded-lg">
