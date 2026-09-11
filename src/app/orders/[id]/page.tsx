@@ -91,7 +91,7 @@ export default function OrderDetailPage() {
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [exchangeStep, setExchangeStep] = useState<0 | 1 | 2 | 3>(0);
   const [exchangeOldItems, setExchangeOldItems] = useState<Set<string>>(new Set());
-  const [exchangeNewProducts, setExchangeNewProducts] = useState<Product[]>([]);
+  const [exchangeNewProducts, setExchangeNewProducts] = useState<{ product: Product; selectedSize?: string }[]>([]);
   const [exchangeCostInput, setExchangeCostInput] = useState('');
   const [exchangeCreating, setExchangeCreating] = useState(false);
   const [capturedOldItemsTotal, setCapturedOldItemsTotal] = useState(0);
@@ -390,13 +390,26 @@ export default function OrderDetailPage() {
 
   const toggleNewProduct = (product: Product) => {
     setExchangeNewProducts((prev) => {
-      const exists = prev.find((p) => p.id === product.id);
-      if (exists) return prev.filter((p) => p.id !== product.id);
-      return [...prev, product];
+      const exists = prev.find((e) => e.product.id === product.id);
+      if (exists) return prev.filter((e) => e.product.id !== product.id);
+      return [...prev, { product }];
     });
   };
 
-  const newItemsTotal = exchangeNewProducts.reduce((s, p) => s + p.price, 0);
+  const setExchangeProductSize = (productId: string, sizeName: string) => {
+    setExchangeNewProducts((prev) =>
+      prev.map((e) => e.product.id === productId ? { ...e, selectedSize: sizeName } : e),
+    );
+  };
+
+  const getExchangeItemPrice = (entry: { product: Product; selectedSize?: string }) => {
+    if (entry.selectedSize) {
+      return entry.product.sizes?.find((s) => s.name === entry.selectedSize)?.price ?? entry.product.price;
+    }
+    return entry.product.price;
+  };
+
+  const newItemsTotal = exchangeNewProducts.reduce((s, e) => s + getExchangeItemPrice(e), 0);
   const priceDiff = newItemsTotal - capturedOldItemsTotal;
 
   const handleExchangeConfirm = async () => {
@@ -412,19 +425,26 @@ export default function OrderDetailPage() {
         order.id,
         { customerName: order.customerName, customerPhone: order.customerPhone, customerAddress: order.customerAddress, notes: order.notes, paymentMethod: order.paymentMethod },
         capturedOldItemsData.map((i) => ({ id: i.id, productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, productName: i.productName, productColor: i.productColor, productSize: i.productSize, productImageUri: i.productImageUri, costPrice: i.costPrice })),
-        exchangeNewProducts.map((p) => ({ productId: p.id, quantity: 1, unitPrice: p.price, productName: p.name, productColor: p.color, productSize: p.size, productImageUri: p.imageUri, costPrice: p.costPrice })),
+        exchangeNewProducts.map((e) => {
+          const price = getExchangeItemPrice(e);
+          return { productId: e.product.id, quantity: 1, unitPrice: price, productName: e.product.name, productColor: e.product.color, productSize: e.selectedSize || e.product.size, productImageUri: e.product.imageUri, costPrice: e.product.costPrice, selectedSize: e.selectedSize };
+        }),
         exchangeCost,
         priceDiff,
       );
 
       // 3. Deduct stock for new items
-      const newOrderItems = exchangeNewProducts.map((p) => ({
-        id: '', orderId: exchangeOrderId, productId: p.id, quantity: 1,
-        unitPrice: p.price, originalUnitPrice: p.price, isGift: false,
-        createdAt: Date.now(), productName: p.name, productSku: p.sku,
-        productColor: p.color, productSize: p.size, productImageUri: p.imageUri,
-        currentStock: 0, costPrice: p.costPrice, isExchangeReturn: false,
-      }));
+      const newOrderItems = exchangeNewProducts.map((e) => {
+        const price = getExchangeItemPrice(e);
+        return {
+          id: '', orderId: exchangeOrderId, productId: e.product.id, quantity: 1,
+          unitPrice: price, originalUnitPrice: price, isGift: false,
+          createdAt: Date.now(), productName: e.product.name, productSku: e.product.sku,
+          productColor: e.product.color, productSize: e.selectedSize || e.product.size, productImageUri: e.product.imageUri,
+          currentStock: 0, costPrice: e.product.costPrice, isExchangeReturn: false,
+          selectedSize: e.selectedSize,
+        };
+      });
       const { success } = await inventoryService.deductStock(newOrderItems);
       if (!success) {
         // Rollback: cancel exchange to restore old items to main order
@@ -1031,32 +1051,55 @@ export default function OrderDetailPage() {
           ) : (
             <div className="max-h-[300px] overflow-y-auto space-y-1">
               {filteredProducts.filter((p) => p.stock > 0).map((product) => {
-                const selected = exchangeNewProducts.some((p) => p.id === product.id);
+                const entry = exchangeNewProducts.find((e) => e.product.id === product.id);
+                const selected = !!entry;
+                const hasSizes = (product.sizes ?? []).length > 0;
                 return (
-                  <button
-                    key={product.id}
-                    onClick={() => toggleNewProduct(product)}
-                    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg border transition-colors ${
-                      selected ? "bg-green-50 border-green-300" : "bg-white border-gray-100 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {product.imageUri && (
-                        <img src={product.imageUri} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                      )}
-                      <div className="text-left min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {product.name}{product.color ? ` (${product.color})` : ''}
-                        </p>
-                        <p className="text-xs text-muted">{product.sku} · {formatVND(product.price)} · Kho: {product.stock}</p>
+                  <div key={product.id}>
+                    <button
+                      onClick={() => toggleNewProduct(product)}
+                      className={`w-full flex items-center justify-between px-3 py-3 rounded-lg border transition-colors ${
+                        selected ? "bg-green-50 border-green-300" : "bg-white border-gray-100 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {product.imageUri && (
+                          <img src={product.imageUri} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                        )}
+                        <div className="text-left min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {product.name}{product.color ? ` (${product.color})` : ''}
+                          </p>
+                          <p className="text-xs text-muted">{product.sku} · {formatVND(product.price)} · Kho: {product.stock}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      selected ? "border-green-500 bg-green-500" : "border-gray-300"
-                    }`}>
-                      {selected && <div className="w-2 h-2 rounded-full bg-white" />}
-                    </div>
-                  </button>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        selected ? "border-green-500 bg-green-500" : "border-gray-300"
+                      }`}>
+                        {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                    </button>
+                    {selected && hasSizes && (
+                      <div className="px-3 pb-2 flex flex-wrap gap-1.5 mt-1">
+                        {product.sizes.filter((s) => s.stock > 0).map((s) => (
+                          <button
+                            key={s.name}
+                            onClick={() => setExchangeProductSize(product.id, s.name)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              entry?.selectedSize === s.name
+                                ? "bg-green-600 text-white border-green-600"
+                                : "bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400"
+                            }`}
+                          >
+                            {s.name} ({s.stock})
+                          </button>
+                        ))}
+                        {!entry?.selectedSize && (
+                          <span className="text-[10px] text-amber-500 self-center ml-1">Chọn size</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -1064,6 +1107,11 @@ export default function OrderDetailPage() {
           <button
             onClick={() => {
               if (exchangeNewProducts.length === 0) return;
+              const missingSize = exchangeNewProducts.find((e) => (e.product.sizes ?? []).length > 0 && !e.selectedSize);
+              if (missingSize) {
+                alert(`Vui lòng chọn size cho "${missingSize.product.name}"`);
+                return;
+              }
               setExchangeStep(3);
             }}
             disabled={exchangeNewProducts.length === 0}
@@ -1098,13 +1146,13 @@ export default function OrderDetailPage() {
           <div>
             <h4 className="text-sm font-bold text-green-600 mb-2">Sản phẩm mới</h4>
             <div className="space-y-1">
-              {exchangeNewProducts.map((p) => (
-                <div key={p.id} className="flex justify-between items-center bg-green-50 rounded-lg px-3 py-2">
+              {exchangeNewProducts.map((e) => (
+                <div key={e.product.id} className="flex justify-between items-center bg-green-50 rounded-lg px-3 py-2">
                   <span className="text-sm text-green-700 truncate flex-1">
-                    {p.name}{p.color ? ` (${p.color})` : ''}
+                    {e.product.name}{e.product.color ? ` (${e.product.color})` : ''}{e.selectedSize ? ` - ${e.selectedSize}` : ''}
                   </span>
                   <span className="text-sm font-semibold text-green-600 shrink-0 ml-2">
-                    +{formatVND(p.price)}
+                    +{formatVND(getExchangeItemPrice(e))}
                   </span>
                 </div>
               ))}

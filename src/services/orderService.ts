@@ -634,7 +634,7 @@ export const orderService = {
     mainOrderId: string,
     mainOrder: { customerName: string; customerPhone: string; customerAddress: string; notes: string; paymentMethod: string | null },
     oldItems: { id: string; productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number }[],
-    newItems: { productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number }[],
+    newItems: { productId: string; quantity: number; unitPrice: number; productName: string; productSku?: string; productColor: string; productSize: string; productImageUri: string | null; costPrice: number; selectedSize?: string }[],
     exchangeCost: number,
     priceDiff: number,
   ): Promise<string> {
@@ -673,6 +673,7 @@ export const orderService = {
         productImageUri: ni.productImageUri,
         costPrice: ni.costPrice,
         isExchangeReturn: false,
+        selectedSize: ni.selectedSize,
       })),
     ];
 

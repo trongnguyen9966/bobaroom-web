@@ -171,23 +171,34 @@ export const inventoryService = {
 
     await runTransaction(db, async (tx) => {
       const orderSnap = await tx.get(orderRef);
-      const orderItems: Array<{ id: string; productId: string; quantity: number }> =
+      const orderItems: Array<{ id: string; productId: string; quantity: number; selectedSize?: string }> =
         orderSnap.data()?.items ?? [];
       if (orderItems.length === 0) return;
 
-      const productRefs = orderItems.map((i) => doc(db, PRODUCTS, i.productId));
+      const uniqueProductIds = [...new Set(orderItems.map((i) => i.productId))];
+      const productRefs = uniqueProductIds.map((pid) => doc(db, PRODUCTS, pid));
       const productSnaps = await Promise.all(productRefs.map((r) => tx.get(r)));
 
-      const stockMap = new Map<string, number>();
-      for (const snap of productSnaps) {
-        if (snap.exists()) stockMap.set(snap.id, snap.data()!.stock as number);
-      }
+      const productDataMap = new Map<string, Record<string, unknown>>();
+      productSnaps.forEach((snap) => {
+        if (snap.exists()) productDataMap.set(snap.id, snap.data()!);
+      });
 
       const keptItems = orderItems.filter((item) => {
-        const stock = stockMap.get(item.productId) ?? 0;
-        if (stock < item.quantity) {
-          removedItemIds.push(item.id);
-          return false;
+        const data = productDataMap.get(item.productId);
+        if (!data) { removedItemIds.push(item.id); return false; }
+        if (item.selectedSize && (data.sizes as Array<{ name: string; stock: number }> | undefined)?.length) {
+          const sizeEntry = (data.sizes as Array<{ name: string; stock: number }>).find((s) => s.name === item.selectedSize);
+          if (!sizeEntry || sizeEntry.stock < item.quantity) {
+            removedItemIds.push(item.id);
+            return false;
+          }
+        } else {
+          const stock = (data.stock as number) ?? 0;
+          if (stock < item.quantity) {
+            removedItemIds.push(item.id);
+            return false;
+          }
         }
         return true;
       });
