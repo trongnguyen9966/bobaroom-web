@@ -344,8 +344,9 @@ function CreateOrderForm() {
         const order = await orderService.create(data);
         router.push(`/orders/${order.id}`);
       }
-    } catch (e) {
-      alert("Không thể lưu đơn hàng");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`Không thể lưu đơn hàng: ${msg}`);
       console.error(e);
     } finally {
       setSaving(false);
