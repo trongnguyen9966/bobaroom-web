@@ -331,7 +331,7 @@ function CreateOrderForm() {
             productSize: i.selectedSize || i.product.size,
             productImageUri: i.product.imageUri,
             costPrice: i.product.costPrice,
-            selectedSize: i.selectedSize || undefined,
+            ...(i.selectedSize ? { selectedSize: i.selectedSize } : {}),
           };
         }),
       };

@@ -180,7 +180,7 @@ export const orderService = {
       productSize: item.productSize ?? '',
       productImageUri: item.productImageUri ?? null,
       costPrice: item.costPrice ?? 0,
-      selectedSize: item.selectedSize || undefined,
+      ...(item.selectedSize ? { selectedSize: item.selectedSize } : {}),
     }));
 
     const orderDoc = {
@@ -299,7 +299,7 @@ export const orderService = {
         productImageUri: item.productImageUri ?? prev?.productImageUri ?? null,
         costPrice: item.costPrice ?? prev?.costPrice ?? 0,
         isExchangeReturn: prev?.isExchangeReturn ?? false,
-        selectedSize: item.selectedSize || prev?.selectedSize || undefined,
+        ...(item.selectedSize || prev?.selectedSize ? { selectedSize: item.selectedSize || prev?.selectedSize } : {}),
       };
     });
 
@@ -377,7 +377,7 @@ export const orderService = {
           productSize: selectedSize || productInfo?.size || '',
           productImageUri: productInfo?.imageUri ?? null,
           costPrice: productInfo?.costPrice ?? 0,
-          selectedSize,
+          ...(selectedSize ? { selectedSize } : {}),
         });
       }
       tx.update(ref, { items, updatedAt: now });
@@ -663,7 +663,7 @@ export const orderService = {
         productImageUri: i.productImageUri,
         costPrice: i.costPrice,
         isExchangeReturn: true,
-        selectedSize: i.selectedSize,
+        ...(i.selectedSize ? { selectedSize: i.selectedSize } : {}),
       })),
       ...newItems.map((ni) => ({
         id: generateId(),
@@ -680,7 +680,7 @@ export const orderService = {
         productImageUri: ni.productImageUri,
         costPrice: ni.costPrice,
         isExchangeReturn: false,
-        selectedSize: ni.selectedSize,
+        ...(ni.selectedSize ? { selectedSize: ni.selectedSize } : {}),
       })),
     ];
 
