@@ -75,6 +75,19 @@ function CreateProductForm() {
       return;
     }
 
+    // Check duplicate size names
+    if (sizes.length > 0) {
+      const sizeNames = sizes.map((s) => s.name.trim().toLowerCase()).filter(Boolean);
+      const seen = new Set<string>();
+      for (const n of sizeNames) {
+        if (seen.has(n)) {
+          alert(`Tên kích thước "${n}" bị trùng. Vui lòng đặt tên khác nhau cho mỗi size.`);
+          return;
+        }
+        seen.add(n);
+      }
+    }
+
     setSaving(true);
     try {
       let finalImageUri = imageUri;
@@ -313,7 +326,9 @@ function CreateProductForm() {
 
         {sizes.length > 0 && (
           <div className="space-y-2">
-            {sizes.map((s, idx) => (
+            {sizes.map((s, idx) => {
+              const isDuplicate = s.name.trim() !== "" && sizes.some((other, i) => i !== idx && other.name.trim().toLowerCase() === s.name.trim().toLowerCase());
+              return (
               <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2 relative">
                 <button
                   onClick={() => setSizes(sizes.filter((_, i) => i !== idx))}
@@ -331,8 +346,9 @@ function CreateProductForm() {
                       setSizes(next);
                     }}
                     placeholder="VD: size 13"
-                    className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    className={`mt-1 w-full bg-white border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${isDuplicate ? "border-red-400 focus:ring-red-200 focus:border-red-400" : "border-gray-200 focus:ring-primary/20 focus:border-primary"}`}
                   />
+                  {isDuplicate && <p className="text-[11px] text-red-500 mt-0.5">Tên size bị trùng</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -364,7 +380,8 @@ function CreateProductForm() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
