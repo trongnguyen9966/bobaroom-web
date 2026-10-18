@@ -24,6 +24,7 @@ import {
   PlatformFeeType,
   Product,
 } from "@/types";
+import { inventoryService } from "@/services/inventoryService";
 import { formatInputNumber, formatVND, parseNumber } from "@/utils/currency";
 import { generateId } from "@/utils/uuid";
 
@@ -81,6 +82,8 @@ function CreateOrderForm() {
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [editingConfirmedOrder, setEditingConfirmedOrder] = useState(false);
   const sessionIdRef = useRef(generateId());
+  // Store original items when editing a confirmed order (for stock diff calculation)
+  const originalItemsRef = useRef<{ productId: string; quantity: number; selectedSize?: string }[]>([]);
 
   // Load settings + default shipping fee
   useEffect(() => {
@@ -115,7 +118,12 @@ function CreateOrderForm() {
       setDiscountValue(order.discountValue > 0 ? String(order.discountValue) : "");
       setShippingFee(order.shippingFee > 0 ? String(order.shippingFee) : "");
       if (order.paymentMethod) setPaymentMethod(order.paymentMethod);
-      if (order.status !== "draft") setEditingConfirmedOrder(true);
+      if (order.status !== "draft") {
+        setEditingConfirmedOrder(true);
+        originalItemsRef.current = order.items
+          .filter((i) => !i.isGift)
+          .map((i) => ({ productId: i.productId, quantity: i.quantity, selectedSize: i.selectedSize }));
+      }
       setOrderType(order.orderType ?? "normal");
       setPlatformFeeType(order.platformFeeType ?? "percent");
       setPlatformFeeValue(order.platformFeeValue > 0 ? String(order.platformFeeValue) : "");
@@ -337,6 +345,76 @@ function CreateOrderForm() {
       };
 
       if (editId) {
+        // If editing a confirmed+ order, adjust stock for item changes
+        if (editingConfirmedOrder) {
+          const oldItems = originalItemsRef.current;
+          const newItems = data.items.filter((i) => !i.isGift);
+
+          // Build quantity maps: key → quantity
+          const oldMap = new Map<string, number>();
+          for (const i of oldItems) {
+            const key = i.selectedSize ? `${i.productId}::${i.selectedSize}` : i.productId;
+            oldMap.set(key, (oldMap.get(key) ?? 0) + i.quantity);
+          }
+          const newMap = new Map<string, number>();
+          for (const i of newItems) {
+            const key = i.selectedSize ? `${i.productId}::${i.selectedSize}` : i.productId;
+            newMap.set(key, (newMap.get(key) ?? 0) + i.quantity);
+          }
+
+          // Items to restore (removed or reduced quantity)
+          const toRestore: { productId: string; quantity: number; selectedSize?: string }[] = [];
+          // Items to deduct (added or increased quantity)
+          const toDeduct: { productId: string; quantity: number; selectedSize?: string }[] = [];
+
+          // Check old items: if removed or reduced
+          for (const [key, oldQty] of oldMap) {
+            const newQty = newMap.get(key) ?? 0;
+            const [productId, selectedSize] = key.includes('::') ? key.split('::') : [key, undefined];
+            if (newQty < oldQty) {
+              toRestore.push({ productId, quantity: oldQty - newQty, selectedSize });
+            }
+          }
+          // Check new items: if added or increased
+          for (const [key, newQty] of newMap) {
+            const oldQty = oldMap.get(key) ?? 0;
+            const [productId, selectedSize] = key.includes('::') ? key.split('::') : [key, undefined];
+            if (newQty > oldQty) {
+              toDeduct.push({ productId, quantity: newQty - oldQty, selectedSize });
+            }
+          }
+
+          // Restore stock for removed/reduced items
+          if (toRestore.length > 0) {
+            await inventoryService.restoreStock(
+              toRestore.map((i) => ({
+                id: '', orderId: '', productId: i.productId, quantity: i.quantity,
+                unitPrice: 0, originalUnitPrice: 0, isGift: false, createdAt: 0,
+                productName: '', productSku: '', productColor: '', productSize: '',
+                productImageUri: null, currentStock: 0, costPrice: 0, isExchangeReturn: false,
+                selectedSize: i.selectedSize,
+              })),
+            );
+          }
+          // Deduct stock for added/increased items
+          if (toDeduct.length > 0) {
+            const { success } = await inventoryService.deductStock(
+              toDeduct.map((i) => ({
+                id: '', orderId: '', productId: i.productId, quantity: i.quantity,
+                unitPrice: 0, originalUnitPrice: 0, isGift: false, createdAt: 0,
+                productName: '', productSku: '', productColor: '', productSize: '',
+                productImageUri: null, currentStock: 0, costPrice: 0, isExchangeReturn: false,
+                selectedSize: i.selectedSize,
+              })),
+            );
+            if (!success) {
+              alert("Không đủ tồn kho cho sản phẩm mới thêm. Vui lòng kiểm tra lại.");
+              setSaving(false);
+              return;
+            }
+          }
+        }
+
         await orderService.update(editId, data);
         await orderService.clearEditingBy(editId, sessionIdRef.current);
         router.push(`/orders/${editId}`);
