@@ -5,6 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { ProductPickerModal } from "@/components/orders/ProductPickerModal";
 import { AddressPickerModal } from "@/components/orders/AddressPickerModal";
 import { AutoFillModal } from "@/components/orders/AutoFillModal";
+import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
 import { productService } from "@/services/productService";
 import { settingsService } from "@/services/settingsService";
@@ -16,6 +17,7 @@ import {
   OldAddressWarning,
 } from "@/services/addressLookupService";
 import { parseCustomerText } from "@/utils/parseCustomerText";
+import { parseProductMessage } from "@/utils/parseProductMessage";
 import {
   AppSettings,
   DiscountType,
@@ -75,6 +77,8 @@ function CreateOrderForm() {
   const [giftPickerVisible, setGiftPickerVisible] = useState(false);
   const [addressPickerField, setAddressPickerField] = useState<"province" | "ward" | null>(null);
   const [autoFillVisible, setAutoFillVisible] = useState(false);
+  const [catalogPasteVisible, setCatalogPasteVisible] = useState(false);
+  const [catalogPasteText, setCatalogPasteText] = useState("");
 
   // State
   const [saving, setSaving] = useState(false);
@@ -240,6 +244,42 @@ function CreateOrderForm() {
     if (addrResult.province) setCustomerProvince(addrResult.province);
     if (addrResult.ward) setCustomerWard(addrResult.ward);
     setOldAddressWarning(detectOldAddress(addrSource));
+  };
+
+  const handleCatalogPaste = async (text: string) => {
+    const entries = parseProductMessage(text);
+    if (entries.length === 0) {
+      alert("Không tìm thấy mã sản phẩm nào trong tin nhắn.");
+      return;
+    }
+    const allProducts = await productService.getAll();
+    const skuMap = new Map(allProducts.map((p) => [p.sku.toUpperCase(), p]));
+    const matched: DraftItem[] = [];
+    const notFound: string[] = [];
+    for (const entry of entries) {
+      const product = skuMap.get(entry.sku);
+      if (product) {
+        matched.push({ product, quantity: entry.quantity, isGift: false });
+      } else {
+        notFound.push(entry.sku);
+      }
+    }
+    if (matched.length > 0) {
+      setItems((prev) => {
+        const existingIds = new Set(prev.map((i) => i.product.id));
+        const newItems = matched.filter((m) => !existingIds.has(m.product.id));
+        const updated = prev.map((i) => {
+          const match = matched.find((m) => m.product.id === i.product.id);
+          return match ? { ...i, quantity: i.quantity + match.quantity } : i;
+        });
+        return [...updated, ...newItems];
+      });
+    }
+    setCatalogPasteVisible(false);
+    setCatalogPasteText("");
+    if (notFound.length > 0) {
+      alert(`Thêm ${matched.length} sản phẩm. Không tìm thấy: ${notFound.join(", ")}`);
+    }
   };
 
   const handleAddressChange = (text: string) => {
@@ -577,12 +617,20 @@ function CreateOrderForm() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-gray-900">Sản phẩm ({items.length})</h3>
-          <button
-            onClick={() => setPickerVisible(true)}
-            className="text-xs font-semibold text-primary hover:underline"
-          >
-            + Thêm sản phẩm
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setCatalogPasteVisible(true)}
+              className="text-xs font-semibold text-orange-500 hover:underline"
+            >
+              Dán đơn catalog
+            </button>
+            <button
+              onClick={() => setPickerVisible(true)}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              + Thêm sản phẩm
+            </button>
+          </div>
         </div>
 
         {items.length === 0 ? (
@@ -1020,6 +1068,30 @@ function CreateOrderForm() {
         onClose={() => setAutoFillVisible(false)}
         onConfirm={handleAutoFill}
       />
+
+      {/* Catalog paste modal */}
+      <Modal open={catalogPasteVisible} onClose={() => { setCatalogPasteText(""); setCatalogPasteVisible(false); }} title="Dán đơn từ catalog" size="md">
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Dán tin nhắn đặt hàng từ khách (từ catalog Zalo/Facebook). Hệ thống sẽ tự nhận mã SP và số lượng.
+          </p>
+          <textarea
+            value={catalogPasteText}
+            onChange={(e) => setCatalogPasteText(e.target.value)}
+            placeholder={"VD:\n- A27 - Lip trắng x1\n- L07 - Lắc tim cây L7 x2\n- A58 - Heo hồng x1"}
+            rows={8}
+            autoFocus
+            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+          />
+          <button
+            onClick={() => handleCatalogPaste(catalogPasteText)}
+            disabled={!catalogPasteText.trim()}
+            className="w-full py-3 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
+          >
+            Thêm sản phẩm
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
