@@ -221,7 +221,8 @@ function loadImageEl(src: string): Promise<HTMLImageElement> {
   if (cached && cached.complete) return Promise.resolve(cached);
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // Only set crossOrigin for http(s) URLs, not data: URLs
+    if (!src.startsWith("data:")) img.crossOrigin = "anonymous";
     img.onload = () => { imgElCache.set(src, img); resolve(img); };
     img.onerror = reject;
     // Proxy Firebase URLs to avoid CORS block
@@ -294,14 +295,14 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
       return centerDeg - totalSpread / 2 + i * spacingDeg;
     }
 
-    // Collect all image URLs to load
+    // Collect all image URLs to load (including data: URLs from background removal)
     const imageUrls: string[] = [];
     if (hasBraceletImage) imageUrls.push(bracelet.imageUri!);
     charms.forEach((charm) => {
       const origUrl = getBuilderImage(charm.product);
       const processedUrl = origUrl ? processedImages.get(origUrl) : null;
       const url = processedUrl || origUrl;
-      if (url && isWebUrl(url)) imageUrls.push(url);
+      if (url && (isWebUrl(url) || url.startsWith("data:"))) imageUrls.push(url);
     });
 
     // Load all images, then draw everything
