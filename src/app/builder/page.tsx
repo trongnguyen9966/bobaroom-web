@@ -181,13 +181,12 @@ function detectBraceletCircle(imageUrl: string): Promise<DetectedCircle | null> 
         const centX = sumX / darkPixels.length;
         const centY = sumY / darkPixels.length;
 
-        // Tính radius: dùng outer edge (percentile 85) thay vì trung bình
-        // để charm nằm đúng viền ngoài vòng lắc
+        // Tính radius: dùng median distance (percentile 50) để charm nằm giữa band vòng lắc
         const distances = darkPixels.map(
           (p) => Math.sqrt((p.x - centX) ** 2 + (p.y - centY) ** 2)
         );
         distances.sort((a, b) => a - b);
-        const outerRadius = distances[Math.floor(distances.length * 0.85)];
+        const outerRadius = distances[Math.floor(distances.length * 0.5)];
 
         const result: DetectedCircle = {
           cx: centX / canvas.width,
@@ -254,10 +253,13 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     circleRadius = imgRenderSize * 0.35;
   }
 
-  // Phân bổ charm quanh phần dưới vòng tròn
+  // Phân bổ charm quanh phần dưới vòng tròn — spacing thay đổi theo số lượng
   const centerDeg = 180;
-  const maxArc = 260;
-  const spacingDeg = Math.min(25, maxArc / Math.max(charms.length, 1));
+  const n = charms.length;
+  let spacingDeg: number;
+  if (n <= 3) spacingDeg = 18;       // 1-3: gom sát nhau
+  else if (n <= 7) spacingDeg = 22;  // 4-7: vừa phải
+  else spacingDeg = 25;              // 8-10: giãn ra tối đa
 
   function charmDeg(i: number, n: number): number {
     if (n === 1) return centerDeg;
