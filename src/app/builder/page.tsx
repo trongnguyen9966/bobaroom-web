@@ -224,7 +224,11 @@ function loadImageEl(src: string): Promise<HTMLImageElement> {
     img.crossOrigin = "anonymous";
     img.onload = () => { imgElCache.set(src, img); resolve(img); };
     img.onerror = reject;
-    img.src = src;
+    // Proxy Firebase URLs to avoid CORS block
+    const url = src.includes("firebasestorage.googleapis.com")
+      ? `/api/proxy-image?url=${encodeURIComponent(src)}`
+      : src;
+    img.src = url;
   });
 }
 
