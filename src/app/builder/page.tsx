@@ -233,6 +233,41 @@ function loadImageEl(src: string): Promise<HTMLImageElement> {
   });
 }
 
+// Tìm bounding box của content thật (non-transparent pixels) trong ảnh
+interface TrimBounds { x: number; y: number; w: number; h: number; }
+const trimCache = new Map<string, TrimBounds>();
+
+function getTrimBounds(img: HTMLImageElement, cacheKey: string): TrimBounds {
+  const cached = trimCache.get(cacheKey);
+  if (cached) return cached;
+
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext("2d")!;
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, c.width, c.height).data;
+
+  let minX = c.width, minY = c.height, maxX = 0, maxY = 0;
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      const alpha = data[(y * c.width + x) * 4 + 3];
+      if (alpha > 20) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  const bounds = minX <= maxX
+    ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }
+    : { x: 0, y: 0, w: c.width, h: c.height };
+  trimCache.set(cacheKey, bounds);
+  return bounds;
+}
+
 // ─── Preview Components ──────────────────────────────────────────
 function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
   bracelet: Product | null;
@@ -283,7 +318,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     // Charm layout params
     const centerDeg = 180;
     const n = charms.length;
-    const SPACING_XO = 18;
+    const SPACING_XO = 22;
     const SPACING_TREO = 10;
     let rotationScale: number;
     let radiusOffset: number;
@@ -423,18 +458,18 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
         let drawH = charmSize;
 
         if (charmImg) {
-          // Draw charm image centered, maintaining aspect ratio
-          const srcW = charmImg.naturalWidth;
-          const srcH = charmImg.naturalHeight;
-          const aspect = srcW / srcH;
-          if (aspect > 1) { drawH = charmSize / aspect; }
-          else { drawW = charmSize * aspect; }
+          // Trim transparent pixels to get actual content bounds
+          const trim = getTrimBounds(charmImg, imgUrl!);
+          const trimAspect = trim.w / trim.h;
+          if (trimAspect > 1) { drawH = charmSize / trimAspect; }
+          else { drawW = charmSize * trimAspect; }
 
           // Subtle shadow
           ctx.shadowColor = "rgba(0,0,0,0.15)";
           ctx.shadowBlur = 4;
           ctx.shadowOffsetY = 2;
-          ctx.drawImage(charmImg, -drawW / 2, -drawH / 2, drawW, drawH);
+          // Draw only the trimmed content area, scaled to consistent size
+          ctx.drawImage(charmImg, trim.x, trim.y, trim.w, trim.h, -drawW / 2, -drawH / 2, drawW, drawH);
           ctx.shadowColor = "transparent";
         } else {
           // Placeholder circle
