@@ -86,35 +86,49 @@ function removeWhiteBackground(imageUrl: string): Promise<string> {
   });
 }
 
-function useRemovedBgImage(imageUrl: string | null): string | null {
-  const [processed, setProcessed] = useState<string | null>(null);
-  useEffect(() => {
-    if (!imageUrl || !isWebUrl(imageUrl)) { setProcessed(null); return; }
-    removeWhiteBackground(imageUrl).then(setProcessed);
-  }, [imageUrl]);
-  return processed;
-}
-
-// Batch hook: xử lý nhiều ảnh charm cùng lúc
-function useRemovedBgImages(charms: SelectedCharm[]): Map<string, string> {
+// Pre-process all product images for background removal (runs on page load)
+function usePreprocessedImages(products: Product[]): Map<string, string> {
   const [map, setMap] = useState<Map<string, string>>(new Map());
+  const processedUrlsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    const urls = charms
-      .map((c) => getBuilderImage(c.product))
-      .filter((u): u is string => !!u && isWebUrl(u));
-    const unique = [...new Set(urls)];
-    if (unique.length === 0) return;
+    const urls = products
+      .map((p) => getBuilderImage(p))
+      .filter((u): u is string => !!u && isWebUrl(u))
+      .filter((u) => !processedUrlsRef.current.has(u));
+
+    if (urls.length === 0) return;
 
     let cancelled = false;
-    Promise.all(unique.map(async (url) => {
-      const result = await removeWhiteBackground(url);
-      return [url, result] as const;
-    })).then((entries) => {
-      if (cancelled) return;
-      setMap(new Map(entries));
-    });
+    // Process in small batches to avoid overwhelming the browser
+    const batchSize = 6;
+    const unique = [...new Set(urls)];
+
+    (async () => {
+      for (let i = 0; i < unique.length; i += batchSize) {
+        if (cancelled) return;
+        const batch = unique.slice(i, i + batchSize);
+        const results = await Promise.all(
+          batch.map(async (url) => {
+            const result = await removeWhiteBackground(url);
+            return [url, result] as const;
+          })
+        );
+        if (cancelled) return;
+        setMap((prev) => {
+          const next = new Map(prev);
+          for (const [url, result] of results) {
+            next.set(url, result);
+            processedUrlsRef.current.add(url);
+          }
+          return next;
+        });
+      }
+    })();
+
     return () => { cancelled = true; };
-  }, [charms]);
+  }, [products]);
+
   return map;
 }
 
@@ -167,17 +181,18 @@ function detectBraceletCircle(imageUrl: string): Promise<DetectedCircle | null> 
         const centX = sumX / darkPixels.length;
         const centY = sumY / darkPixels.length;
 
-        // Tính radius trung bình (khoảng cách từ centroid đến các pixel tối)
-        let sumDist = 0;
-        for (const p of darkPixels) {
-          sumDist += Math.sqrt((p.x - centX) ** 2 + (p.y - centY) ** 2);
-        }
-        const avgRadius = sumDist / darkPixels.length;
+        // Tính radius: dùng outer edge (percentile 85) thay vì trung bình
+        // để charm nằm đúng viền ngoài vòng lắc
+        const distances = darkPixels.map(
+          (p) => Math.sqrt((p.x - centX) ** 2 + (p.y - centY) ** 2)
+        );
+        distances.sort((a, b) => a - b);
+        const outerRadius = distances[Math.floor(distances.length * 0.85)];
 
         const result: DetectedCircle = {
           cx: centX / canvas.width,
           cy: centY / canvas.height,
-          radius: avgRadius / Math.max(canvas.width, canvas.height),
+          radius: outerRadius / Math.max(canvas.width, canvas.height),
         };
         circleCache.set(imageUrl, result);
         resolve(result);
@@ -200,13 +215,13 @@ function useDetectedCircle(imageUrl: string | null) {
 }
 
 // ─── Preview Components ──────────────────────────────────────────
-function RoundPreview({ bracelet, charms, showNumbers }: {
+function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
   bracelet: Product | null;
   charms: SelectedCharm[];
   showNumbers: boolean;
+  processedImages: Map<string, string>;
 }) {
   const detected = useDetectedCircle(bracelet?.imageUri ?? null);
-  const processedImages = useRemovedBgImages(charms);
 
   if (!bracelet) {
     return (
@@ -230,8 +245,8 @@ function RoundPreview({ bracelet, charms, showNumbers }: {
   if (detected) {
     circleCx = imgOffset + detected.cx * imgRenderSize;
     circleCy = imgOffset + detected.cy * imgRenderSize;
-    // Giảm nhẹ radius để charm nằm sát vòng hơn
-    circleRadius = detected.radius * imgRenderSize * 0.85;
+    // Dùng outer edge radius trực tiếp (đã detect bằng percentile 85)
+    circleRadius = detected.radius * imgRenderSize;
   } else {
     // Fallback: tâm ảnh, radius = 35% ảnh
     circleCx = containerSize / 2;
@@ -348,12 +363,12 @@ function RoundPreview({ bracelet, charms, showNumbers }: {
   );
 }
 
-function HorizontalPreview({ bracelet, charms, showNumbers }: {
+function HorizontalPreview({ bracelet, charms, showNumbers, processedImages }: {
   bracelet: Product | null;
   charms: SelectedCharm[];
   showNumbers: boolean;
+  processedImages: Map<string, string>;
 }) {
-  const processedImages = useRemovedBgImages(charms);
 
   if (!bracelet) {
     return (
@@ -615,8 +630,6 @@ export default function BuilderPage() {
     setHistoryIdx(newIdx);
   }, [canRedo, historyIdx, history]);
 
-  // (không cần image loading — dùng HTML img trực tiếp)
-
   // ─── Computed data ─────────────────────────────────────────
   const braceletProducts = useMemo(() => {
     if (braceletCategoryIds.length === 0) return [];
@@ -639,6 +652,9 @@ export default function BuilderPage() {
       return true;
     });
   }, [products, braceletCategoryIds, selectedCharmCategory, search]);
+
+  // Pre-process background removal for all charm images on load
+  const processedImages = usePreprocessedImages(charmProducts);
 
   const totalPrice = useMemo(() => {
     const braceletPrice = selectedBracelet?.price ?? 0;
@@ -786,7 +802,7 @@ export default function BuilderPage() {
 
       <div className="flex-1 flex flex-col lg:flex-row">
         {/* LEFT: Preview */}
-        <div className="lg:w-1/2 xl:w-[45%] flex flex-col bg-white lg:border-r border-pink-100">
+        <div className="lg:w-1/2 xl:w-[45%] flex flex-col bg-white lg:border-r border-pink-100 lg:overflow-auto">
           {/* View mode toggle */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
             <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
@@ -822,9 +838,9 @@ export default function BuilderPage() {
           {/* Preview */}
           <div ref={previewRef} className="flex-1 min-h-[350px] bg-white">
             {viewMode === "round" ? (
-              <RoundPreview bracelet={selectedBracelet} charms={charms} showNumbers={showNumbers} />
+              <RoundPreview bracelet={selectedBracelet} charms={charms} showNumbers={showNumbers} processedImages={processedImages} />
             ) : (
-              <HorizontalPreview bracelet={selectedBracelet} charms={charms} showNumbers={showNumbers} />
+              <HorizontalPreview bracelet={selectedBracelet} charms={charms} showNumbers={showNumbers} processedImages={processedImages} />
             )}
           </div>
 
