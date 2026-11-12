@@ -344,7 +344,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
         const deg = charmDeg(i, n);
         const rad = ((deg - 90) * Math.PI) / 180;
         const hanging = isHangingCharm(charm.product);
-        const r = (hanging ? radius + charmSize * 0.3 : radius) + radiusOffset;
+        const r = (hanging ? radius + charmSize * 0.3 : radius - charmSize * 0.2) + radiusOffset;
         const x = cx + Math.cos(rad) * r;
         const y = cy + Math.sin(rad) * r;
         const rotateDeg = (deg - 180) * rotationScale;
