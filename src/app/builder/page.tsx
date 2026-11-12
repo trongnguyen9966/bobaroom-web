@@ -806,7 +806,8 @@ export default function BuilderPage() {
           {/* View mode toggle */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
             <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-              {(["round", "horizontal"] as ViewMode[]).map((mode) => (
+              {/* TODO: bật lại "horizontal" khi hoàn thiện */}
+              {(["round"] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
