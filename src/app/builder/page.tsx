@@ -332,11 +332,14 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
       ctx.fillStyle = "#FFFFFF";
       ctx.fillRect(0, 0, CSS_W, CSS_H);
 
-      // Draw bracelet image
+      // Draw bracelet image & get pixel data for band detection
+      let braceletPixels: ImageData | null = null;
       if (hasBraceletImage) {
         const braceletImg = imgElCache.get(bracelet.imageUri!);
         if (braceletImg) {
           ctx.drawImage(braceletImg, padX, padY, imgRenderSize, imgRenderSize);
+          // Capture pixel data for band detection
+          braceletPixels = ctx.getImageData(0, 0, CSS_W * DPR, CSS_H * DPR);
         }
       } else {
         // Fallback gradient circle
@@ -358,15 +361,50 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
         ctx.stroke();
       }
 
+      // Scan radial line to find bracelet band center at a given angle
+      function findBandRadius(angleDeg: number): number | null {
+        if (!braceletPixels) return null;
+        const angleRad = ((angleDeg - 90) * Math.PI) / 180;
+        const cosA = Math.cos(angleRad);
+        const sinA = Math.sin(angleRad);
+        const threshold = 220;
+        const step = 1;
+        const maxR = Math.max(CSS_W, CSS_H);
+        let firstDark = -1;
+        let lastDark = -1;
+
+        for (let dist = 0; dist < maxR; dist += step) {
+          const px = Math.round((cx + cosA * dist) * DPR);
+          const py = Math.round((cy + sinA * dist) * DPR);
+          if (px < 0 || py < 0 || px >= CSS_W * DPR || py >= CSS_H * DPR) break;
+          const idx = (py * CSS_W * DPR + px) * 4;
+          const gray = (braceletPixels.data[idx] + braceletPixels.data[idx + 1] + braceletPixels.data[idx + 2]) / 3;
+          if (gray < threshold) {
+            if (firstDark < 0) firstDark = dist;
+            lastDark = dist;
+          }
+        }
+        if (firstDark < 0) return null;
+        return (firstDark + lastDark) / 2; // midpoint of band
+      }
+
       // Draw charms
       charms.forEach((charm, i) => {
         const deg = charmDegs[i];
         const rad = ((deg - 90) * Math.PI) / 180;
         const hanging = isHangingCharm(charm.product);
-        // Charm ở đáy vòng (gần 180°) bị lệch xuống quá => kéo lên
-        const bottomFactor = Math.max(0, Math.cos((deg - 180) * Math.PI / 180));
-        const bottomPull = bottomFactor * charmSize * 0.25;
-        const r = (hanging ? radius + charmSize * 0.3 : radius) - bottomPull + radiusOffset;
+
+        let r: number;
+        if (!hanging && hasBraceletImage) {
+          // Charm xỏ: auto-detect band center at this angle
+          const bandR = findBandRadius(deg);
+          r = (bandR ?? radius) + radiusOffset;
+        } else {
+          // Charm treo: offset from radius
+          const bottomFactor = Math.max(0, Math.cos((deg - 180) * Math.PI / 180));
+          const bottomPull = bottomFactor * charmSize * 0.25;
+          r = radius + charmSize * 0.3 - bottomPull + radiusOffset;
+        }
         const x = cx + Math.cos(rad) * r;
         const y = cy + Math.sin(rad) * r;
         const rotateDeg = (deg - 180) * rotationScale;
