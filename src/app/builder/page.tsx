@@ -546,6 +546,7 @@ export default function BuilderPage() {
 
   // Ref cho export ảnh
   const previewRef = useRef<HTMLDivElement>(null);
+  const charmCounter = useRef(0);
 
   // ─── Data loading ────────────────────────────────────────────
   useEffect(() => {
@@ -586,7 +587,10 @@ export default function BuilderPage() {
           const p = products.find((pp) => pp.id === cid);
           if (p) restored.push({ id: `charm_${counter++}`, product: p });
         }
-        if (restored.length) setCharms(restored);
+        if (restored.length) {
+          setCharms(restored);
+          charmCounter.current = counter;
+        }
       }
     } catch { /* ignore */ }
   }, [loading, products]);
@@ -673,8 +677,6 @@ export default function BuilderPage() {
   }, [selectedBracelet, charms]);
 
   // ─── Actions ───────────────────────────────────────────────
-  let charmCounter = useRef(0);
-
   const addCharm = (product: Product) => {
     if (charms.length >= maxCharms) return;
     const id = `charm_${charmCounter.current++}`;
@@ -811,8 +813,8 @@ export default function BuilderPage() {
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row lg:h-[calc(100vh-56px)] lg:overflow-hidden">
-        {/* LEFT: Preview */}
-        <div className="lg:w-1/2 xl:w-[45%] flex flex-col bg-white lg:border-r border-pink-100 lg:overflow-auto">
+        {/* LEFT: Preview — sticky on mobile so it stays visible while scrolling charms */}
+        <div className="sticky top-[49px] z-40 lg:static lg:w-1/2 xl:w-[45%] flex flex-col bg-white lg:border-r border-pink-100 lg:overflow-auto">
           {/* View mode toggle */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
             <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
@@ -846,8 +848,8 @@ export default function BuilderPage() {
             </div>
           </div>
 
-          {/* Preview */}
-          <div ref={previewRef} className="bg-white">
+          {/* Preview — scaled down on mobile to leave room for charm catalog */}
+          <div ref={previewRef} className="bg-white origin-top scale-[0.55] -mb-[45%] lg:scale-100 lg:mb-0">
             {viewMode === "round" ? (
               <RoundPreview bracelet={selectedBracelet} charms={charms} showNumbers={showNumbers} processedImages={processedImages} />
             ) : (
