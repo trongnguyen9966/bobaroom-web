@@ -26,6 +26,8 @@ function mapProduct(snap: { id: string; data(): Record<string, any> | undefined 
     costPrice: 0, // never expose cost price publicly
     stock: d.stock,
     sizes: d.sizes ?? [],
+    builderImageUri: d.builderImageUri ?? null,
+    charmType: d.charmType ?? 'xo',
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   };

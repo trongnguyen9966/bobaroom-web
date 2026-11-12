@@ -7,7 +7,7 @@ import { ensureAuth } from "@/services/firebase";
 import { authService } from "@/services/authService";
 import { LoginScreen } from "@/components/LoginScreen";
 
-const PUBLIC_ROUTES = ["/", "/login"];
+const PUBLIC_ROUTES = ["/", "/login", "/builder"];
 
 const NAV_ITEMS = [
   { href: "/orders", label: "Đơn hàng", icon: "📋", activeIcon: "📋" },

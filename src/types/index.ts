@@ -40,6 +40,8 @@ export interface Product {
   costPrice: number;
   stock: number;
   sizes: ProductSize[];
+  builderImageUri: string | null;
+  charmType: 'xo' | 'treo';
   createdAt: number;
   updatedAt: number;
 }
@@ -57,6 +59,8 @@ export interface CreateProductDTO {
   costPrice: number;
   stock: number;
   sizes?: ProductSize[];
+  builderImageUri?: string | null;
+  charmType?: 'xo' | 'treo';
 }
 
 export type UpdateProductDTO = Partial<CreateProductDTO>;
@@ -88,6 +92,9 @@ export interface AppSettings {
   catalogPromoDescription: string;
   catalogPromoItems: CatalogPromoItem[];
   comboDiscountPercent: number;
+  builderEnabled: boolean;
+  builderMaxCharms: number;
+  builderBraceletCategoryIds: string[];
 }
 
 export interface CatalogPromoItem {

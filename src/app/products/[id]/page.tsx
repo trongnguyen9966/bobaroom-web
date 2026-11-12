@@ -73,6 +73,7 @@ export default function ProductDetailPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingRealImage, setUploadingRealImage] = useState<number | null>(null);
+  const [uploadingBuilderImage, setUploadingBuilderImage] = useState(false);
 
   const load = useCallback(async () => {
     const data = await productService.getById(id);
@@ -156,6 +157,35 @@ export default function ProductDetailPage() {
     } catch {
       alert("Không thể xóa ảnh");
     }
+  };
+
+  const handleBuilderImageUpload = async (file: File) => {
+    setUploadingBuilderImage(true);
+    try {
+      const url = await imageService.uploadProductImage(`${id}_builder`, file);
+      await productService.update(id, { builderImageUri: url });
+      await load();
+    } catch {
+      alert("Không thể tải ảnh lên");
+    } finally {
+      setUploadingBuilderImage(false);
+    }
+  };
+
+  const handleBuilderImageRemove = async () => {
+    try {
+      await productService.update(id, { builderImageUri: null });
+      await load();
+    } catch {
+      alert("Không thể xóa ảnh");
+    }
+  };
+
+  const handleCharmTypeToggle = async () => {
+    if (!product) return;
+    const newType = product.charmType === 'treo' ? 'xo' : 'treo';
+    await productService.update(id, { charmType: newType });
+    await load();
   };
 
   if (loading) {
@@ -269,6 +299,36 @@ export default function ProductDetailPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Builder settings card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+            <h3 className="text-sm font-bold text-gray-900">Cài đặt Builder</h3>
+            <p className="text-xs text-muted">Ảnh phối mẫu sẽ được ưu tiên dùng trong trang phối charm. Nếu không có sẽ dùng ảnh cover.</p>
+            <div className="flex gap-3 items-start">
+              <RealImageSlot
+                imageUrl={product.builderImageUri}
+                uploading={uploadingBuilderImage}
+                onImageSelected={handleBuilderImageUpload}
+                onImageRemoved={handleBuilderImageRemove}
+                label="Ảnh phối"
+              />
+              <div className="flex-1 pt-1">
+                <label className="text-xs text-muted font-medium">Loại charm</label>
+                <button
+                  onClick={handleCharmTypeToggle}
+                  className={`mt-1 w-full flex items-center justify-between bg-gray-50 border rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                    product.charmType === 'treo' ? 'border-purple-300 bg-purple-50' : 'border-amber-300 bg-amber-50'
+                  }`}
+                >
+                  <span>{product.charmType === 'treo' ? '🔔 Charm treo' : '📿 Charm xỏ'}</span>
+                  <span className="text-[10px] text-muted">Nhấn để đổi</span>
+                </button>
+                <p className="text-[10px] text-muted mt-1">
+                  {product.charmType === 'treo' ? 'Charm treo: nằm ngoài vòng, lệch ra bên ngoài' : 'Charm xỏ: nằm trên vòng, xỏ vào dây'}
+                </p>
+              </div>
             </div>
           </div>
 

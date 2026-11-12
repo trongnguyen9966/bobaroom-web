@@ -369,6 +369,30 @@ export default function SettingsPage() {
             )}
           </SettingCard>
 
+          {/* Builder */}
+          <SettingCard title="Phối mẫu (Builder)">
+            <ToggleRow
+              label="Bật tính năng phối mẫu trên catalog"
+              checked={settings.builderEnabled}
+              onChange={(v) => updateSetting("builderEnabled", v)}
+            />
+            {settings.builderEnabled && (
+              <div className="space-y-3 mt-3 pt-3 border-t border-gray-100">
+                <NumberInput
+                  label="Số charm tối đa trên 1 vòng"
+                  value={settings.builderMaxCharms}
+                  onChange={(v) => updateSetting("builderMaxCharms", v)}
+                />
+                <CategoryMultiSelect
+                  label="Danh mục vòng/lắc (cho phép thêm charm)"
+                  categories={categories}
+                  selectedIds={settings.builderBraceletCategoryIds}
+                  onChange={(ids) => updateSetting("builderBraceletCategoryIds", ids)}
+                />
+              </div>
+            )}
+          </SettingCard>
+
           {/* Google Sheets */}
           <SettingCard title="Google Sheets">
             <div>

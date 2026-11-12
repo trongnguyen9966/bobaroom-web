@@ -159,6 +159,8 @@ function CreateOrderForm() {
             costPrice: i.costPrice,
             stock: 0,
             sizes: [],
+            builderImageUri: null,
+            charmType: 'xo',
             createdAt: 0,
             updatedAt: 0,
           } as Product,

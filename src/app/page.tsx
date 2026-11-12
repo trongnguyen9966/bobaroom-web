@@ -417,6 +417,12 @@ export default function CatalogPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
+            <a
+              href="/builder"
+              className="shrink-0 px-3 py-3 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 transition-colors shadow-sm whitespace-nowrap"
+            >
+              Phối mẫu
+            </a>
             <button
               onClick={() => guideRef.current?.scrollIntoView({ behavior: "smooth" })}
               className="shrink-0 px-3 py-3 rounded-full bg-pink-500 text-white text-xs font-semibold hover:bg-pink-600 active:bg-pink-700 transition-colors shadow-sm whitespace-nowrap"
