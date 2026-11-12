@@ -363,7 +363,10 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
         const deg = charmDegs[i];
         const rad = ((deg - 90) * Math.PI) / 180;
         const hanging = isHangingCharm(charm.product);
-        const r = (hanging ? radius + charmSize * 0.3 : radius) + radiusOffset;
+        // Charm treo ở đáy vòng (gần 180°) bị lệch xuống quá => giảm radius offset
+        const bottomFactor = hanging ? Math.max(0, Math.cos((deg - 180) * Math.PI / 180)) : 0;
+        const bottomPull = bottomFactor * charmSize * 0.25; // kéo lên tối đa 25% ở vị trí 180°
+        const r = (hanging ? radius + charmSize * 0.3 - bottomPull : radius) + radiusOffset;
         const x = cx + Math.cos(rad) * r;
         const y = cy + Math.sin(rad) * r;
         const rotateDeg = (deg - 180) * rotationScale;
@@ -627,6 +630,7 @@ export default function BuilderPage() {
   const [copied, setCopied] = useState(false);
   const [sendToast, setSendToast] = useState<string | null>(null);
   const [showNumbers, setShowNumbers] = useState(false);
+  const [showCharmList, setShowCharmList] = useState(false);
 
   // History for undo/redo
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -787,14 +791,28 @@ export default function BuilderPage() {
 
   // ─── Export ────────────────────────────────────────────────
   const exportImage = async () => {
-    const el = previewRef.current;
-    if (!el) return;
-    // Dynamic import html2canvas
-    const { default: html2canvas } = await import("html2canvas");
-    const canvas = await html2canvas(el, { backgroundColor: "#FFFFFF", scale: 2, useCORS: true });
+    // Lấy canvas trực tiếp từ preview ref
+    const canvas = previewRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+
+    // Try share API (mobile) first, then fallback to download
+    if (navigator.share && navigator.canShare) {
+      try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], `boba-room-${Date.now()}.png`, { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "Boba Room - Phối mẫu" });
+          return;
+        }
+      } catch { /* user cancelled or not supported, fallback */ }
+    }
+
+    // Fallback: download
     const link = document.createElement("a");
     link.download = `boba-room-${Date.now()}.png`;
-    link.href = canvas.toDataURL("image/png");
+    link.href = dataUrl;
     link.click();
   };
 
@@ -946,37 +964,47 @@ export default function BuilderPage() {
             )}
           </div>
 
-          {/* Selected charms list */}
+          {/* Selected charms list — collapsible */}
           {charms.length > 0 && (
-            <div className="border-t border-gray-100 px-3 py-1.5">
-              <div className="flex items-center justify-between mb-1">
+            <div className="border-t border-gray-100 px-3 py-1">
+              <button
+                onClick={() => setShowCharmList(!showCharmList)}
+                className="flex items-center justify-between w-full py-1"
+              >
                 <p className="text-[11px] font-bold text-gray-700">
                   Charm đã chọn ({charms.length}/{maxCharms})
                 </p>
-                <button onClick={clearCharms} className="text-[11px] text-red-400 hover:text-red-600 font-medium">
-                  Xóa hết
-                </button>
-              </div>
-              <div className="flex gap-2 overflow-x-auto pt-1 pr-2 pb-0.5 scrollbar-hide">
-                {charms.map((charm, idx) => (
-                  <div key={charm.id} className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-lg bg-pink-50 border border-pink-200 overflow-hidden flex items-center justify-center">
-                      {isWebUrl(getBuilderImage(charm.product)) ? (
-                        <img src={getBuilderImage(charm.product)!} alt={charm.product.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-[10px] text-pink-400 font-bold">{idx + 1}</span>
-                      )}
+                <div className="flex items-center gap-2">
+                  <span onClick={(e) => { e.stopPropagation(); clearCharms(); }} className="text-[11px] text-red-400 hover:text-red-600 font-medium">
+                    Xóa hết
+                  </span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${showCharmList ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
+              {showCharmList && (
+                <div className="flex gap-2 overflow-x-auto pt-1 pr-2 pb-0.5 scrollbar-hide">
+                  {charms.map((charm, idx) => (
+                    <div key={charm.id} className="relative shrink-0">
+                      <div className="w-10 h-10 rounded-lg bg-pink-50 border border-pink-200 overflow-hidden flex items-center justify-center">
+                        {isWebUrl(getBuilderImage(charm.product)) ? (
+                          <img src={getBuilderImage(charm.product)!} alt={charm.product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] text-pink-400 font-bold">{idx + 1}</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => removeCharm(charm.id)}
+                        className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-md hover:bg-red-600 active:bg-red-700"
+                      >
+                        &times;
+                      </button>
+                      <p className="text-[8px] text-gray-500 text-center mt-0.5 w-10 truncate">{charm.product.name}</p>
                     </div>
-                    <button
-                      onClick={() => removeCharm(charm.id)}
-                      className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-md hover:bg-red-600 active:bg-red-700"
-                    >
-                      &times;
-                    </button>
-                    <p className="text-[8px] text-gray-500 text-center mt-0.5 w-10 truncate">{charm.product.name}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -987,7 +1015,7 @@ export default function BuilderPage() {
               disabled={!selectedBracelet}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 transition-colors"
             >
-              Lưu ảnh
+              Lưu / Chia sẻ ảnh
             </button>
             <button
               onClick={() => setShowExportModal(true)}
