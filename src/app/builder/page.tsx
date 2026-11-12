@@ -297,7 +297,8 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
 
     // Layout constants (in CSS px)
     const imgRenderSize = 260;
-    const charmSize = 48;
+    const CHARM_SIZE_XO = 48;
+    const CHARM_SIZE_TREO = 68;
     const padX = (CSS_W - imgRenderSize) / 2;
     const padY = 15; // minimal top padding to maximize vertical space
 
@@ -428,14 +429,13 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
         const deg = charmDegs[i];
         const rad = ((deg - 90) * Math.PI) / 180;
         const hanging = isHangingCharm(charm.product);
+        const charmSize = hanging ? CHARM_SIZE_TREO : CHARM_SIZE_XO;
 
         let r: number;
         if (!hanging && hasBraceletImage) {
-          // Charm xỏ: auto-detect band center at this angle
           const bandR = findBandRadius(deg);
           r = (bandR ?? radius) + radiusOffset;
         } else {
-          // Charm treo: offset from radius
           const bottomFactor = Math.max(0, Math.cos((deg - 180) * Math.PI / 180));
           const bottomPull = bottomFactor * charmSize * 0.25;
           r = radius + charmSize * 0.3 - bottomPull + radiusOffset;
@@ -458,21 +458,17 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
         let drawH = charmSize;
 
         if (charmImg) {
-          // Trim transparent pixels to get actual content bounds
           const trim = getTrimBounds(charmImg, imgUrl!);
           const trimAspect = trim.w / trim.h;
           if (trimAspect > 1) { drawH = charmSize / trimAspect; }
           else { drawW = charmSize * trimAspect; }
 
-          // Subtle shadow
           ctx.shadowColor = "rgba(0,0,0,0.15)";
           ctx.shadowBlur = 4;
           ctx.shadowOffsetY = 2;
-          // Draw only the trimmed content area, scaled to consistent size
           ctx.drawImage(charmImg, trim.x, trim.y, trim.w, trim.h, -drawW / 2, -drawH / 2, drawW, drawH);
           ctx.shadowColor = "transparent";
         } else {
-          // Placeholder circle
           ctx.beginPath();
           ctx.arc(0, 0, charmSize / 3, 0, Math.PI * 2);
           ctx.fillStyle = "#FDF2F8";
