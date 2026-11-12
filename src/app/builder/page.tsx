@@ -181,12 +181,12 @@ function detectBraceletCircle(imageUrl: string): Promise<DetectedCircle | null> 
         const centX = sumX / darkPixels.length;
         const centY = sumY / darkPixels.length;
 
-        // Tính radius: dùng median distance (percentile 50) để charm nằm giữa band vòng lắc
+        // Tính radius: dùng percentile 70 để charm nằm trên mép ngoài vòng lắc
         const distances = darkPixels.map(
           (p) => Math.sqrt((p.x - centX) ** 2 + (p.y - centY) ** 2)
         );
         distances.sort((a, b) => a - b);
-        const outerRadius = distances[Math.floor(distances.length * 0.5)];
+        const outerRadius = distances[Math.floor(distances.length * 0.7)];
 
         const result: DetectedCircle = {
           cx: centX / canvas.width,
@@ -292,7 +292,6 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
               width: imgRenderSize,
               height: imgRenderSize,
               mixBlendMode: "multiply",
-              transform: "rotate(180deg)",
             }}
           />
         )}
