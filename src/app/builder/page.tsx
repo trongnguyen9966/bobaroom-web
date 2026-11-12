@@ -297,7 +297,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
 
     // Layout constants (in CSS px)
     const imgRenderSize = 260;
-    const CHARM_SIZE_XO = 48;
+    const CHARM_SIZE_XO = 40;
     const CHARM_SIZE_TREO = 68;
     const padX = (CSS_W - imgRenderSize) / 2;
     const padY = 15; // minimal top padding to maximize vertical space
@@ -320,12 +320,9 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     const centerDeg = 180;
     const n = charms.length;
     const SPACING_XO = 22;
-    const SPACING_TREO = 10;
-    let rotationScale: number;
-    let radiusOffset: number;
-    if (n <= 3) { rotationScale = 0.3; radiusOffset = -5; }
-    else if (n <= 7) { rotationScale = 0.6; radiusOffset = 0; }
-    else { rotationScale = 1.0; radiusOffset = 5; }
+    const SPACING_TREO = 13;
+    const rotationScale = 0.6;
+    const radiusOffset = 0;
 
     // Tính vị trí góc cho từng charm dựa trên loại (treo/xỏ có spacing khác nhau)
     function computeCharmDegs(): number[] {
@@ -436,9 +433,11 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
           const bandR = findBandRadius(deg);
           r = (bandR ?? radius) + radiusOffset;
         } else {
+          // bottomFactor: 1 ở đáy (180°), 0 ở 2 bên (90°/270°)
           const bottomFactor = Math.max(0, Math.cos((deg - 180) * Math.PI / 180));
-          const bottomPull = bottomFactor * charmSize * 0.25;
-          r = radius + charmSize * 0.3 - bottomPull + radiusOffset;
+          // Offset ra ngoài: nhiều ở đáy, ít ở 2 bên để charm hướng vào trong
+          const hangOffset = charmSize * (0.15 + 0.15 * bottomFactor);
+          r = radius + hangOffset + radiusOffset;
         }
         const x = cx + Math.cos(rad) * r;
         const y = cy + Math.sin(rad) * r;
