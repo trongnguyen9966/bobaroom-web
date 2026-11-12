@@ -363,10 +363,10 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
         const deg = charmDegs[i];
         const rad = ((deg - 90) * Math.PI) / 180;
         const hanging = isHangingCharm(charm.product);
-        // Charm treo ở đáy vòng (gần 180°) bị lệch xuống quá => giảm radius offset
-        const bottomFactor = hanging ? Math.max(0, Math.cos((deg - 180) * Math.PI / 180)) : 0;
-        const bottomPull = bottomFactor * charmSize * 0.25; // kéo lên tối đa 25% ở vị trí 180°
-        const r = (hanging ? radius + charmSize * 0.3 - bottomPull : radius) + radiusOffset;
+        // Charm ở đáy vòng (gần 180°) bị lệch xuống quá => kéo lên
+        const bottomFactor = Math.max(0, Math.cos((deg - 180) * Math.PI / 180));
+        const bottomPull = bottomFactor * charmSize * 0.25;
+        const r = (hanging ? radius + charmSize * 0.3 : radius) - bottomPull + radiusOffset;
         const x = cx + Math.cos(rad) * r;
         const y = cy + Math.sin(rad) * r;
         const rotateDeg = (deg - 180) * rotationScale;
