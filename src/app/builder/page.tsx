@@ -253,20 +253,21 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     circleRadius = imgRenderSize * 0.35;
   }
 
-  // Phân bổ charm quanh phần dưới vòng tròn — spacing & rotation thay đổi theo số lượng
+  // Phân bổ charm quanh phần dưới vòng tròn — spacing cố định, rotation & offset thay đổi theo số lượng
   const centerDeg = 180;
   const n = charms.length;
-  let spacingDeg: number;
+  const spacingDeg = 22; // spacing cố định 22°
   let rotationScale: number; // hệ số xoay: 0 = thẳng đứng, 1 = xoay theo tiếp tuyến đầy đủ
+  let radiusOffset: number;  // offset thêm ra ngoài vòng (px)
   if (n <= 3) {
-    spacingDeg = 15;
     rotationScale = 0.3;    // 1-3: gần thẳng đứng, ít xoay
+    radiusOffset = -5;       // gần vòng hơn
   } else if (n <= 7) {
-    spacingDeg = 20;
     rotationScale = 0.6;    // 4-7: xoay vừa
+    radiusOffset = 0;        // vị trí mặc định
   } else {
-    spacingDeg = 25;
     rotationScale = 1.0;    // 8-10: xoay đầy đủ theo vòng
+    radiusOffset = 5;        // xa vòng hơn một chút
   }
 
   function charmDeg(i: number, n: number): number {
@@ -322,7 +323,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
           const deg = charmDeg(i, n);
           const rad = ((deg - 90) * Math.PI) / 180;
           const hanging = isHangingCharm(charm.product);
-          const r = hanging ? circleRadius + charmSize * 0.25 : circleRadius;
+          const r = (hanging ? circleRadius + charmSize * 0.25 : circleRadius) + radiusOffset;
           const x = circleCx + Math.cos(rad) * r;
           const y = circleCy + Math.sin(rad) * r;
 
