@@ -297,7 +297,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
 
     // Layout constants (in CSS px)
     const imgRenderSize = 260;
-    const charmSize = 75;
+    const charmSize = 48;
     const padX = (CSS_W - imgRenderSize) / 2;
     const padY = 15; // minimal top padding to maximize vertical space
 
