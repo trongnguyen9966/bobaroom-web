@@ -283,18 +283,37 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     // Charm layout params
     const centerDeg = 180;
     const n = charms.length;
-    const spacingDeg = 19;
+    const SPACING_XO = 18;
+    const SPACING_TREO = 10;
     let rotationScale: number;
     let radiusOffset: number;
     if (n <= 3) { rotationScale = 0.3; radiusOffset = -5; }
     else if (n <= 7) { rotationScale = 0.6; radiusOffset = 0; }
     else { rotationScale = 1.0; radiusOffset = 5; }
 
-    function charmDeg(i: number, total: number): number {
-      if (total === 1) return centerDeg;
-      const totalSpread = (total - 1) * spacingDeg;
-      return centerDeg - totalSpread / 2 + i * spacingDeg;
+    // Tính vị trí góc cho từng charm dựa trên loại (treo/xỏ có spacing khác nhau)
+    function computeCharmDegs(): number[] {
+      if (n === 0) return [];
+      if (n === 1) return [centerDeg];
+      // Tính tổng spacing giữa các charm liền kề
+      const gaps: number[] = [];
+      for (let i = 1; i < n; i++) {
+        const prevHanging = isHangingCharm(charms[i - 1].product);
+        const currHanging = isHangingCharm(charms[i].product);
+        // Spacing = trung bình của 2 charm liền kề
+        const s1 = prevHanging ? SPACING_TREO : SPACING_XO;
+        const s2 = currHanging ? SPACING_TREO : SPACING_XO;
+        gaps.push((s1 + s2) / 2);
+      }
+      const totalSpread = gaps.reduce((a, b) => a + b, 0);
+      const startAngle = centerDeg - totalSpread / 2;
+      const degs = [startAngle];
+      for (let i = 0; i < gaps.length; i++) {
+        degs.push(degs[i] + gaps[i]);
+      }
+      return degs;
     }
+    const charmDegs = computeCharmDegs();
 
     // Collect all image URLs to load (including data: URLs from background removal)
     const imageUrls: string[] = [];
@@ -341,7 +360,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
 
       // Draw charms
       charms.forEach((charm, i) => {
-        const deg = charmDeg(i, n);
+        const deg = charmDegs[i];
         const rad = ((deg - 90) * Math.PI) / 180;
         const hanging = isHangingCharm(charm.product);
         const r = (hanging ? radius + charmSize * 0.3 : radius) + radiusOffset;
