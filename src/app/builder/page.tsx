@@ -283,7 +283,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     // Charm layout params
     const centerDeg = 180;
     const n = charms.length;
-    const spacingDeg = 16;
+    const spacingDeg = 19;
     let rotationScale: number;
     let radiusOffset: number;
     if (n <= 3) { rotationScale = 0.3; radiusOffset = -5; }
