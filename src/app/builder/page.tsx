@@ -213,6 +213,21 @@ function useDetectedCircle(imageUrl: string | null) {
   return circle;
 }
 
+// ─── Canvas image loader cache ───────────────────────────────────
+const imgElCache = new Map<string, HTMLImageElement>();
+
+function loadImageEl(src: string): Promise<HTMLImageElement> {
+  const cached = imgElCache.get(src);
+  if (cached && cached.complete) return Promise.resolve(cached);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => { imgElCache.set(src, img); resolve(img); };
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
 // ─── Preview Components ──────────────────────────────────────────
 function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
   bracelet: Product | null;
@@ -220,7 +235,185 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
   showNumbers: boolean;
   processedImages: Map<string, string>;
 }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const detected = useDetectedCircle(bracelet?.imageUri ?? null);
+
+  // Canvas dimensions (2x for retina)
+  const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 2;
+  const CSS_W = 420;
+  const CSS_H = 420;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !bracelet) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Set canvas size for retina
+    canvas.width = CSS_W * DPR;
+    canvas.height = CSS_H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    // Layout constants (in CSS px)
+    const imgRenderSize = 280;
+    const charmSize = 70;
+    const pad = (CSS_W - imgRenderSize) / 2;
+
+    const hasBraceletImage = isWebUrl(bracelet.imageUri);
+
+    // Circle center & radius
+    let cx: number, cy: number, radius: number;
+    if (detected) {
+      cx = pad + detected.cx * imgRenderSize;
+      cy = pad + detected.cy * imgRenderSize;
+      radius = detected.radius * imgRenderSize;
+    } else {
+      cx = CSS_W / 2;
+      cy = CSS_H / 2;
+      radius = imgRenderSize * 0.35;
+    }
+
+    // Charm layout params
+    const centerDeg = 180;
+    const n = charms.length;
+    const spacingDeg = 22;
+    let rotationScale: number;
+    let radiusOffset: number;
+    if (n <= 3) { rotationScale = 0.3; radiusOffset = -5; }
+    else if (n <= 7) { rotationScale = 0.6; radiusOffset = 0; }
+    else { rotationScale = 1.0; radiusOffset = 5; }
+
+    function charmDeg(i: number, total: number): number {
+      if (total === 1) return centerDeg;
+      const totalSpread = (total - 1) * spacingDeg;
+      return centerDeg - totalSpread / 2 + i * spacingDeg;
+    }
+
+    // Collect all image URLs to load
+    const imageUrls: string[] = [];
+    if (hasBraceletImage) imageUrls.push(bracelet.imageUri!);
+    charms.forEach((charm) => {
+      const origUrl = getBuilderImage(charm.product);
+      const processedUrl = origUrl ? processedImages.get(origUrl) : null;
+      const url = processedUrl || origUrl;
+      if (url && isWebUrl(url)) imageUrls.push(url);
+    });
+
+    // Load all images, then draw everything
+    Promise.all(imageUrls.map((url) => loadImageEl(url).catch(() => null))).then(() => {
+      // Clear canvas
+      ctx.clearRect(0, 0, CSS_W, CSS_H);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, CSS_W, CSS_H);
+
+      // Draw bracelet image
+      if (hasBraceletImage) {
+        const braceletImg = imgElCache.get(bracelet.imageUri!);
+        if (braceletImg) {
+          ctx.drawImage(braceletImg, pad, pad, imgRenderSize, imgRenderSize);
+        }
+      } else {
+        // Fallback gradient circle
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 4, 0, Math.PI * 2);
+        ctx.strokeStyle = "#E5E7EB";
+        ctx.lineWidth = 8;
+        ctx.stroke();
+
+        const grad = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+        grad.addColorStop(0, "#F9A8D4");
+        grad.addColorStop(0.3, "#C084FC");
+        grad.addColorStop(0.7, "#93C5FD");
+        grad.addColorStop(1, "#F9A8D4");
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 4, 0, Math.PI * 2);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+      }
+
+      // Draw charms
+      charms.forEach((charm, i) => {
+        const deg = charmDeg(i, n);
+        const rad = ((deg - 90) * Math.PI) / 180;
+        const hanging = isHangingCharm(charm.product);
+        const r = (hanging ? radius + charmSize * 0.3 : radius) + radiusOffset;
+        const x = cx + Math.cos(rad) * r;
+        const y = cy + Math.sin(rad) * r;
+        const rotateDeg = (deg - 180) * rotationScale;
+        const rotateRad = (rotateDeg * Math.PI) / 180;
+
+        const origUrl = getBuilderImage(charm.product);
+        const processedUrl = origUrl ? processedImages.get(origUrl) : null;
+        const imgUrl = processedUrl || origUrl;
+        const charmImg = imgUrl ? imgElCache.get(imgUrl) : null;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotateRad);
+
+        let drawW = charmSize;
+        let drawH = charmSize;
+
+        if (charmImg) {
+          // Draw charm image centered, maintaining aspect ratio
+          const srcW = charmImg.naturalWidth;
+          const srcH = charmImg.naturalHeight;
+          const aspect = srcW / srcH;
+          if (aspect > 1) { drawH = charmSize / aspect; }
+          else { drawW = charmSize * aspect; }
+
+          // Subtle shadow
+          ctx.shadowColor = "rgba(0,0,0,0.15)";
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetY = 2;
+          ctx.drawImage(charmImg, -drawW / 2, -drawH / 2, drawW, drawH);
+          ctx.shadowColor = "transparent";
+        } else {
+          // Placeholder circle
+          ctx.beginPath();
+          ctx.arc(0, 0, charmSize / 3, 0, Math.PI * 2);
+          ctx.fillStyle = "#FDF2F8";
+          ctx.fill();
+          ctx.strokeStyle = "#F9A8D4";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = "#EC4899";
+          ctx.font = "bold 11px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`${i + 1}`, 0, 0);
+        }
+
+        // Number badge
+        if (showNumbers) {
+          const bx = drawW / 2 - 2;
+          const by = -(drawH / 2 - 2);
+          ctx.beginPath();
+          ctx.arc(bx, by, 8, 0, Math.PI * 2);
+          ctx.fillStyle = "#1F2937";
+          ctx.fill();
+          ctx.fillStyle = "#FFFFFF";
+          ctx.font = "bold 9px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`${i + 1}`, bx, by);
+        }
+
+        ctx.restore();
+      });
+
+      // Empty placeholder text
+      if (charms.length === 0) {
+        ctx.fillStyle = "#9CA3AF";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Them charm vao vong", CSS_W / 2, CSS_H / 2);
+      }
+    });
+  }, [bracelet, charms, detected, showNumbers, processedImages, DPR]);
 
   if (!bracelet) {
     return (
@@ -230,144 +423,15 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     );
   }
 
-  const hasBraceletImage = isWebUrl(bracelet.imageUri);
-
-  // Kích thước render ảnh bracelet
-  const imgRenderSize = 280;
-  const charmSize = 80;
-  const pad = charmSize + 16;
-  const containerSize = imgRenderSize + pad * 2;
-  const imgOffset = pad; // top-left of bracelet image in container
-
-  // Vị trí tâm và bán kính thực tế (pixel) dựa trên detect hoặc fallback
-  let circleCx: number, circleCy: number, circleRadius: number;
-  if (detected) {
-    circleCx = imgOffset + detected.cx * imgRenderSize;
-    circleCy = imgOffset + detected.cy * imgRenderSize;
-    // Dùng outer edge radius trực tiếp (đã detect bằng percentile 85)
-    circleRadius = detected.radius * imgRenderSize;
-  } else {
-    // Fallback: tâm ảnh, radius = 35% ảnh
-    circleCx = containerSize / 2;
-    circleCy = containerSize / 2;
-    circleRadius = imgRenderSize * 0.35;
-  }
-
-  // Phân bổ charm quanh phần dưới vòng tròn — spacing cố định, rotation & offset thay đổi theo số lượng
-  const centerDeg = 180;
-  const n = charms.length;
-  const spacingDeg = 22; // spacing cố định 22°
-  let rotationScale: number; // hệ số xoay: 0 = thẳng đứng, 1 = xoay theo tiếp tuyến đầy đủ
-  let radiusOffset: number;  // offset thêm ra ngoài vòng (px)
-  if (n <= 3) {
-    rotationScale = 0.3;    // 1-3: gần thẳng đứng, ít xoay
-    radiusOffset = -5;       // gần vòng hơn
-  } else if (n <= 7) {
-    rotationScale = 0.6;    // 4-7: xoay vừa
-    radiusOffset = 0;        // vị trí mặc định
-  } else {
-    rotationScale = 1.0;    // 8-10: xoay đầy đủ theo vòng
-    radiusOffset = 5;        // xa vòng hơn một chút
-  }
-
-  function charmDeg(i: number, n: number): number {
-    if (n === 1) return centerDeg;
-    const totalSpread = (n - 1) * spacingDeg;
-    const startAngle = centerDeg - totalSpread / 2;
-    return startAngle + i * spacingDeg;
-  }
-
   return (
     <div className="flex flex-col items-center justify-center py-4 gap-2">
-      <div className="relative bg-white" style={{ width: containerSize, height: containerSize }}>
-        {/* Ảnh vòng lắc */}
-        {hasBraceletImage && (
-          <img
-            src={bracelet.imageUri!}
-            alt={bracelet.name}
-            className="absolute object-contain"
-            style={{
-              left: imgOffset,
-              top: imgOffset,
-              width: imgRenderSize,
-              height: imgRenderSize,
-              mixBlendMode: "multiply",
-            }}
-          />
-        )}
-
-        {/* Vòng tròn SVG fallback (khi không có ảnh) */}
-        {!hasBraceletImage && (
-          <svg
-            className="absolute"
-            style={{ left: circleCx - circleRadius, top: circleCy - circleRadius, width: circleRadius * 2, height: circleRadius * 2 }}
-            viewBox={`0 0 ${circleRadius * 2} ${circleRadius * 2}`}
-          >
-            <circle cx={circleRadius} cy={circleRadius} r={circleRadius - 6} fill="none" stroke="#E5E7EB" strokeWidth="10" />
-            <defs>
-              <linearGradient id="braceletGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#F9A8D4" />
-                <stop offset="30%" stopColor="#C084FC" />
-                <stop offset="70%" stopColor="#93C5FD" />
-                <stop offset="100%" stopColor="#F9A8D4" />
-              </linearGradient>
-            </defs>
-            <circle cx={circleRadius} cy={circleRadius} r={circleRadius - 6} fill="none" stroke="url(#braceletGrad)" strokeWidth="8" />
-          </svg>
-        )}
-
-        {/* Charm xung quanh vòng */}
-        {charms.map((charm, i) => {
-          const n = charms.length;
-          const deg = charmDeg(i, n);
-          const rad = ((deg - 90) * Math.PI) / 180;
-          const hanging = isHangingCharm(charm.product);
-          const r = (hanging ? circleRadius + charmSize * 0.25 : circleRadius) + radiusOffset;
-          const x = circleCx + Math.cos(rad) * r;
-          const y = circleCy + Math.sin(rad) * r;
-
-          // Xoay charm theo tiếp tuyến, giảm theo rotationScale khi ít charm
-          const rotateDeg = (deg - 180) * rotationScale;
-          const origUrl = getBuilderImage(charm.product);
-          const processedUrl = origUrl ? processedImages.get(origUrl) : null;
-
-          return (
-            <div
-              key={charm.id}
-              className="absolute group"
-              style={{ left: x - charmSize / 2, top: y - charmSize / 2, transform: `rotate(${rotateDeg}deg)` }}
-            >
-              <div
-                className="flex items-center justify-center"
-                style={{ width: charmSize, height: charmSize }}
-              >
-                {origUrl && isWebUrl(origUrl) ? (
-                  <img
-                    src={processedUrl || origUrl}
-                    alt={charm.product.name}
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <span className="text-xs font-bold text-pink-500">{i + 1}</span>
-                )}
-              </div>
-              {showNumbers && (
-                <span className="absolute -top-2 -right-2 z-10 w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center shadow">
-                  {i + 1}
-                </span>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Placeholder */}
-        {charms.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-gray-400 text-xs">Them charm vao vong</p>
-          </div>
-        )}
-      </div>
-
+      <canvas
+        ref={canvasRef}
+        className="w-full max-w-[420px]"
+        style={{ aspectRatio: "1 / 1", cursor: "default" }}
+        width={CSS_W * DPR}
+        height={CSS_H * DPR}
+      />
       <p className="text-sm font-semibold text-gray-700">{bracelet.name}</p>
     </div>
   );
@@ -848,8 +912,8 @@ export default function BuilderPage() {
             </div>
           </div>
 
-          {/* Preview — scaled down on mobile to leave room for charm catalog */}
-          <div ref={previewRef} className="bg-white origin-top scale-[0.55] -mb-[45%] lg:scale-100 lg:mb-0">
+          {/* Preview */}
+          <div ref={previewRef} className="bg-white">
             {viewMode === "round" ? (
               <RoundPreview bracelet={selectedBracelet} charms={charms} showNumbers={showNumbers} processedImages={processedImages} />
             ) : (
