@@ -245,8 +245,8 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
 
   // Canvas dimensions (2x for retina)
   const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 2;
-  const CSS_W = 420;
-  const CSS_H = 420;
+  const CSS_W = 380;
+  const CSS_H = 340;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -261,21 +261,22 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
     // Layout constants (in CSS px)
-    const imgRenderSize = 280;
-    const charmSize = 70;
-    const pad = (CSS_W - imgRenderSize) / 2;
+    const imgRenderSize = 260;
+    const charmSize = 65;
+    const padX = (CSS_W - imgRenderSize) / 2;
+    const padY = 15; // minimal top padding to maximize vertical space
 
     const hasBraceletImage = isWebUrl(bracelet.imageUri);
 
     // Circle center & radius
     let cx: number, cy: number, radius: number;
     if (detected) {
-      cx = pad + detected.cx * imgRenderSize;
-      cy = pad + detected.cy * imgRenderSize;
+      cx = padX + detected.cx * imgRenderSize;
+      cy = padY + detected.cy * imgRenderSize;
       radius = detected.radius * imgRenderSize;
     } else {
       cx = CSS_W / 2;
-      cy = CSS_H / 2;
+      cy = padY + imgRenderSize / 2;
       radius = imgRenderSize * 0.35;
     }
 
@@ -316,7 +317,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
       if (hasBraceletImage) {
         const braceletImg = imgElCache.get(bracelet.imageUri!);
         if (braceletImg) {
-          ctx.drawImage(braceletImg, pad, pad, imgRenderSize, imgRenderSize);
+          ctx.drawImage(braceletImg, padX, padY, imgRenderSize, imgRenderSize);
         }
       } else {
         // Fallback gradient circle
@@ -429,15 +430,15 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center py-4 gap-2">
+    <div className="flex flex-col items-center justify-center py-1 gap-1">
       <canvas
         ref={canvasRef}
-        className="w-full max-w-[420px]"
-        style={{ aspectRatio: "1 / 1", cursor: "default" }}
+        className="w-full max-w-[380px]"
+        style={{ aspectRatio: `${CSS_W} / ${CSS_H}`, cursor: "default" }}
         width={CSS_W * DPR}
         height={CSS_H * DPR}
       />
-      <p className="text-sm font-semibold text-gray-700">{bracelet.name}</p>
+      <p className="text-xs font-semibold text-gray-700">{bracelet.name}</p>
     </div>
   );
 }
@@ -928,32 +929,32 @@ export default function BuilderPage() {
 
           {/* Selected charms list */}
           {charms.length > 0 && (
-            <div className="border-t border-gray-100 px-4 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-bold text-gray-700">
+            <div className="border-t border-gray-100 px-3 py-1.5">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] font-bold text-gray-700">
                   Charm đã chọn ({charms.length}/{maxCharms})
                 </p>
-                <button onClick={clearCharms} className="text-xs text-red-400 hover:text-red-600 font-medium">
+                <button onClick={clearCharms} className="text-[11px] text-red-400 hover:text-red-600 font-medium">
                   Xóa hết
                 </button>
               </div>
-              <div className="flex gap-3 overflow-x-auto pt-2 pr-2 pb-1 scrollbar-hide">
+              <div className="flex gap-2 overflow-x-auto pt-1 pr-2 pb-0.5 scrollbar-hide">
                 {charms.map((charm, idx) => (
                   <div key={charm.id} className="relative shrink-0">
-                    <div className="w-14 h-14 rounded-xl bg-pink-50 border border-pink-200 overflow-hidden flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-pink-50 border border-pink-200 overflow-hidden flex items-center justify-center">
                       {isWebUrl(getBuilderImage(charm.product)) ? (
                         <img src={getBuilderImage(charm.product)!} alt={charm.product.name} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-xs text-pink-400 font-bold">{idx + 1}</span>
+                        <span className="text-[10px] text-pink-400 font-bold">{idx + 1}</span>
                       )}
                     </div>
                     <button
                       onClick={() => removeCharm(charm.id)}
-                      className="absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow-md hover:bg-red-600 active:bg-red-700"
+                      className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-md hover:bg-red-600 active:bg-red-700"
                     >
                       &times;
                     </button>
-                    <p className="text-[9px] text-gray-500 text-center mt-0.5 w-14 truncate">{charm.product.name}</p>
+                    <p className="text-[8px] text-gray-500 text-center mt-0.5 w-10 truncate">{charm.product.name}</p>
                   </div>
                 ))}
               </div>
@@ -961,7 +962,7 @@ export default function BuilderPage() {
           )}
 
           {/* Action buttons */}
-          <div className="border-t border-gray-100 px-4 py-3 flex gap-2">
+          <div className="border-t border-gray-100 px-4 py-2 flex gap-2">
             <button
               onClick={exportImage}
               disabled={!selectedBracelet}
