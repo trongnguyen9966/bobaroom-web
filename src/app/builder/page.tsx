@@ -262,7 +262,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
 
     // Layout constants (in CSS px)
     const imgRenderSize = 260;
-    const charmSize = 65;
+    const charmSize = 75;
     const padX = (CSS_W - imgRenderSize) / 2;
     const padY = 15; // minimal top padding to maximize vertical space
 
@@ -283,7 +283,7 @@ function RoundPreview({ bracelet, charms, showNumbers, processedImages }: {
     // Charm layout params
     const centerDeg = 180;
     const n = charms.length;
-    const spacingDeg = 22;
+    const spacingDeg = 16;
     let rotationScale: number;
     let radiusOffset: number;
     if (n <= 3) { rotationScale = 0.3; radiusOffset = -5; }
