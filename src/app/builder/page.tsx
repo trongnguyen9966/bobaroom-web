@@ -800,7 +800,7 @@ export default function BuilderPage() {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row">
+      <div className="flex-1 flex flex-col lg:flex-row lg:h-[calc(100vh-56px)] lg:overflow-hidden">
         {/* LEFT: Preview */}
         <div className="lg:w-1/2 xl:w-[45%] flex flex-col bg-white lg:border-r border-pink-100 lg:overflow-auto">
           {/* View mode toggle */}
@@ -836,7 +836,7 @@ export default function BuilderPage() {
           </div>
 
           {/* Preview */}
-          <div ref={previewRef} className="flex-1 min-h-[350px] bg-white">
+          <div ref={previewRef} className="bg-white">
             {viewMode === "round" ? (
               <RoundPreview bracelet={selectedBracelet} charms={charms} showNumbers={showNumbers} processedImages={processedImages} />
             ) : (
