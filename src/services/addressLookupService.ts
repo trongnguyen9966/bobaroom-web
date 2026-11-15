@@ -81,7 +81,7 @@ function expandAbbreviations(text: string): string {
 }
 
 function splitOnAdminKeywords(token: string): string[] {
-  const match = token.match(/\s+(quận|huyện|thị\s+xã|tỉnh|thành\s+phố)\s+/i);
+  const match = token.match(/\s+(phường|xã|thị\s+trấn|quận|huyện|thị\s+xã|tỉnh|thành\s+phố)\s+/i);
   if (match && match.index && match.index > 0) {
     return [token.slice(0, match.index).trim(), token.slice(match.index).trim()].filter(Boolean);
   }
@@ -189,14 +189,36 @@ function matchWardInToken(token: string, wards: Ward[]): string | null {
 }
 
 function matchWard(tokens: string[], wards: Ward[], usedIndices: Set<number>): string | null {
+  // Pass 1: exact match on non-used tokens
   for (let i = tokens.length - 1; i >= 0; i--) {
     if (usedIndices.has(i)) continue;
-    const result = matchWardInToken(tokens[i].trim(), wards);
+    const result = matchWardInTokenExact(tokens[i].trim(), wards);
     if (result) return result;
   }
+  // Pass 2: exact match on used tokens
   for (let i = tokens.length - 1; i >= 0; i--) {
     if (!usedIndices.has(i)) continue;
-    const result = matchWardInToken(tokens[i].trim(), wards);
+    const result = matchWardInTokenExact(tokens[i].trim(), wards);
+    if (result) return result;
+  }
+  // Pass 3: fuzzy on tokens with explicit ward prefix (phường/xã/thị trấn) — high confidence
+  const wardPrefixRe = /(?:^|\s)(?:phường|xã|thị\s*trấn)\s+/i;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (wardPrefixRe.test(tokens[i])) {
+      const result = matchWardInTokenFuzzy(tokens[i].trim(), wards);
+      if (result) return result;
+    }
+  }
+  // Pass 4: fuzzy on non-used tokens
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (usedIndices.has(i)) continue;
+    const result = matchWardInTokenFuzzy(tokens[i].trim(), wards);
+    if (result) return result;
+  }
+  // Pass 5: fuzzy on used tokens
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (!usedIndices.has(i)) continue;
+    const result = matchWardInTokenFuzzy(tokens[i].trim(), wards);
     if (result) return result;
   }
   return null;
