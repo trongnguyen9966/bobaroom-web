@@ -5,7 +5,7 @@ import { getFullProvinceName, parseVietnameseAddress } from './addressLookupServ
 
 const SPX_HEADERS = [
   '*Mã đơn hàng', '*Tên người nhận', '*Số điện thoại',
-  '*Tỉnh/Thành Phố', '*Xã/Phường',
+  '*Tỉnh/Thành Phố', '*Quận/Huyện', '*Xã/Phường',
   '*Địa chỉ chi tiết', 'Lưu ý về địa chỉ', 'Mã bưu chính',
   '*Tên sản phẩm',
   'Số lượng (Thông tin bắt buộc khi chọn Giao hàng một phần & Thu COD)',
@@ -49,6 +49,7 @@ function buildRow(order: OrderWithItems, idx: number): unknown[] {
     order.customerPhone,
     province,
     ward,
+    '',
     order.customerAddress,
     '',
     '',
