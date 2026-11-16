@@ -35,6 +35,7 @@ function buildRow(order: OrderWithItems, idx: number): unknown[] {
   const parsed = parseVietnameseAddress(order.customerAddress);
   const province = getFullProvinceName(order.customerProvince || parsed.province);
   const ward = order.customerWard || parsed.ward;
+  const district = order.customerDistrict || '';
   const items = order.items.filter((i) => !i.isGift && !i.isExchangeReturn);
 
   const productNames = items.map((item) => {
@@ -43,13 +44,15 @@ function buildRow(order: OrderWithItems, idx: number): unknown[] {
     return item.quantity > 1 ? `${label} x${item.quantity}` : label;
   }).join(', ');
 
+  // 3-level (has district) → Tỉnh / Quận-Huyện / Phường-Xã
+  // 2-level (no district) → Tỉnh / ward vào Quận-Huyện / Phường-Xã trống
   return [
     idx + 1,
     order.customerName,
     order.customerPhone,
     province,
-    ward,
-    '',
+    district || ward,
+    district ? ward : '',
     order.customerAddress,
     '',
     '',

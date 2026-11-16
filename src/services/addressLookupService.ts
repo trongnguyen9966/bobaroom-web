@@ -339,7 +339,7 @@ function extractDistrictFromWard(wardName: string): string {
 }
 
 // Strip embedded district from ward name: "Phường 3 Bảo Lộc" → "Phường 3"
-function stripDistrictFromWard(wardName: string): string {
+export function stripDistrictFromWard(wardName: string): string {
   // "Phường 3 Bảo Lộc" → "Phường 3"
   const numMatch = wardName.match(/^((?:Phường|Xã|Thị trấn)\s+\d+)\s+.+$/);
   if (numMatch) return numMatch[1].trim();

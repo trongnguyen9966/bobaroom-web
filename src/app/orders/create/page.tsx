@@ -13,8 +13,20 @@ import {
   detectOldAddress,
   getProvinceNames,
   getWardNames,
+  stripDistrictFromWard,
   OldAddressWarning,
 } from "@/services/addressLookupService";
+import {
+  getOldProvinces,
+  getOldDistricts,
+  getOldWards,
+  matchOldProvince,
+  matchOldDistrict,
+  findDistrictByWard,
+  OldProvince,
+  OldDistrict,
+  OldWard,
+} from "@/services/oldAddressService";
 import { parseCustomerText } from "@/utils/parseCustomerText";
 import { parseProductMessage } from "@/utils/parseProductMessage";
 import {
@@ -75,8 +87,15 @@ function CreateOrderForm() {
   // Modals
   const [pickerVisible, setPickerVisible] = useState(false);
   const [giftPickerVisible, setGiftPickerVisible] = useState(false);
-  const [addressPickerField, setAddressPickerField] = useState<"province" | "ward" | null>(null);
+  const [addressPickerField, setAddressPickerField] = useState<"province" | "district" | "ward" | null>(null);
   const [autoFillText, setAutoFillText] = useState("");
+  const [addressLevel, setAddressLevel] = useState<"2level" | "3level">("2level");
+  // Old (3-level) address state
+  const [oldProvinces, setOldProvinces] = useState<OldProvince[]>([]);
+  const [oldDistricts, setOldDistricts] = useState<OldDistrict[]>([]);
+  const [oldWards, setOldWards] = useState<OldWard[]>([]);
+  const [oldProvinceCode, setOldProvinceCode] = useState<number | null>(null);
+  const [oldDistrictCode, setOldDistrictCode] = useState<number | null>(null);
   const [catalogPasteVisible, setCatalogPasteVisible] = useState(false);
   const [catalogPasteText, setCatalogPasteText] = useState("");
 
@@ -99,6 +118,33 @@ function CreateOrderForm() {
     });
   }, [editId]);
 
+  // Load old provinces when 3-level mode is activated
+  useEffect(() => {
+    if (addressLevel === "3level" && oldProvinces.length === 0) {
+      getOldProvinces().then(setOldProvinces);
+    }
+  }, [addressLevel, oldProvinces.length]);
+
+  // Load old districts when province changes in 3-level mode
+  useEffect(() => {
+    if (oldProvinceCode) {
+      getOldDistricts(oldProvinceCode).then(setOldDistricts);
+    } else {
+      setOldDistricts([]);
+    }
+    setOldDistrictCode(null);
+    setOldWards([]);
+  }, [oldProvinceCode]);
+
+  // Load old wards when district changes in 3-level mode
+  useEffect(() => {
+    if (oldDistrictCode) {
+      getOldWards(oldDistrictCode).then(setOldWards);
+    } else {
+      setOldWards([]);
+    }
+  }, [oldDistrictCode]);
+
   // Load existing order for edit mode
   useEffect(() => {
     if (!editId) return;
@@ -117,6 +163,7 @@ function CreateOrderForm() {
       setCustomerAddress(order.customerAddress);
       setCustomerProvince(order.customerProvince ?? "");
       setCustomerDistrict(order.customerDistrict ?? "");
+      if (order.customerDistrict) setAddressLevel("3level");
       setCustomerWard(order.customerWard ?? "");
       setNotes(order.notes);
       setDiscountType(order.discountType);
@@ -237,17 +284,56 @@ function CreateOrderForm() {
     setGiftItems((prev) => prev.filter((i) => itemKey(i) !== key));
   };
 
-  const handleAutoFill = (text: string) => {
+  const handleAutoFill = async (text: string, level: "2level" | "3level" = "2level") => {
     const result = parseCustomerText(text);
     if (result.name) setCustomerName(result.name);
     if (result.phone) setCustomerPhone(result.phone);
     if (result.address) setCustomerAddress(result.address);
     const addrSource = result.address || text;
 
-    const addrResult = lookupAddress(addrSource);
-    if (addrResult.province) setCustomerProvince(addrResult.province);
-    if (addrResult.ward) setCustomerWard(addrResult.ward);
-    setCustomerDistrict('');
+    if (level === "3level") {
+      const provinces = oldProvinces.length > 0 ? oldProvinces : await getOldProvinces();
+      if (oldProvinces.length === 0) setOldProvinces(provinces);
+
+      const addrResult = lookupAddress(addrSource);
+      const pMatch = matchOldProvince(provinces, addrResult.province || addrSource);
+      if (pMatch) {
+        setCustomerProvince(pMatch.name);
+        setOldProvinceCode(pMatch.code);
+
+        const wardHint = addrResult.ward ? stripDistrictFromWard(addrResult.ward) : '';
+        const found = wardHint ? await findDistrictByWard(pMatch.code, wardHint) : null;
+        if (found) {
+          const districts = await getOldDistricts(pMatch.code);
+          setOldDistricts(districts);
+          setCustomerDistrict(found.district.name);
+          setOldDistrictCode(found.district.code);
+          const wards = await getOldWards(found.district.code);
+          setOldWards(wards);
+          setCustomerWard(found.ward.name);
+        } else {
+          const districts = await getOldDistricts(pMatch.code);
+          setOldDistricts(districts);
+          const districtHint = addrResult.district || '';
+          const dMatch = districtHint ? matchOldDistrict(districts, districtHint) : null;
+          if (dMatch) {
+            setCustomerDistrict(dMatch.name);
+            setOldDistrictCode(dMatch.code);
+          } else {
+            setCustomerDistrict('');
+            setOldDistrictCode(null);
+          }
+          setCustomerWard('');
+        }
+      }
+    } else {
+      const addrResult = lookupAddress(addrSource);
+      if (addrResult.province) setCustomerProvince(addrResult.province);
+      if (addrResult.ward) setCustomerWard(addrResult.ward);
+      setCustomerDistrict('');
+      setOldProvinceCode(null);
+      setOldDistrictCode(null);
+    }
     setOldAddressWarning(detectOldAddress(addrSource));
   };
 
@@ -297,6 +383,19 @@ function CreateOrderForm() {
     setCustomerWard("");
     setCustomerDistrict("");
     setAddressPickerField(null);
+    if (addressLevel === "3level") {
+      const match = oldProvinces.find((p) => p.name === province);
+      setOldProvinceCode(match?.code ?? null);
+      setOldDistrictCode(null);
+    }
+  };
+
+  const handleDistrictSelect = (district: string) => {
+    setCustomerDistrict(district);
+    setCustomerWard("");
+    setAddressPickerField(null);
+    const match = oldDistricts.find((d) => d.name === district);
+    setOldDistrictCode(match?.code ?? null);
   };
 
   const handleWardSelect = (ward: string) => {
@@ -527,6 +626,76 @@ function CreateOrderForm() {
           <p className="text-xs text-muted">
             Dán thông tin khách (tên, SĐT, địa chỉ) từ Zalo/Facebook:
           </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (addressLevel === "2level") return;
+                setAddressLevel("2level");
+                setCustomerDistrict("");
+                setOldProvinceCode(null);
+                setOldDistrictCode(null);
+                if (autoFillText.trim()) {
+                  handleAutoFill(autoFillText, "2level");
+                  setAutoFillText("");
+                } else if (customerAddress) {
+                  const addrResult = lookupAddress(customerAddress);
+                  if (addrResult.province) setCustomerProvince(addrResult.province);
+                  if (addrResult.ward) setCustomerWard(addrResult.ward);
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                addressLevel === "2level"
+                  ? "bg-primary text-white"
+                  : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-100"
+              }`}
+            >
+              Địa chỉ MỚI (2 cấp)
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (addressLevel === "3level") return;
+                setAddressLevel("3level");
+                setCustomerWard("");
+                setCustomerDistrict("");
+                if (autoFillText.trim()) {
+                  handleAutoFill(autoFillText, "3level");
+                  setAutoFillText("");
+                } else if (customerAddress) {
+                  const provinces = oldProvinces.length > 0 ? oldProvinces : await getOldProvinces();
+                  if (oldProvinces.length === 0) setOldProvinces(provinces);
+                  const addrResult = lookupAddress(customerAddress);
+                  const pMatch = matchOldProvince(provinces, addrResult.province || customerAddress);
+                  if (pMatch) {
+                    setCustomerProvince(pMatch.name);
+                    setOldProvinceCode(pMatch.code);
+                    const wardHint = addrResult.ward ? stripDistrictFromWard(addrResult.ward) : '';
+                    const found = wardHint ? await findDistrictByWard(pMatch.code, wardHint) : null;
+                    if (found) {
+                      const districts = await getOldDistricts(pMatch.code);
+                      setOldDistricts(districts);
+                      setCustomerDistrict(found.district.name);
+                      setOldDistrictCode(found.district.code);
+                      const wards = await getOldWards(found.district.code);
+                      setOldWards(wards);
+                      setCustomerWard(found.ward.name);
+                    } else {
+                      const districts = await getOldDistricts(pMatch.code);
+                      setOldDistricts(districts);
+                    }
+                  }
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                addressLevel === "3level"
+                  ? "bg-amber-500 text-white"
+                  : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-100"
+              }`}
+            >
+              Địa chỉ CŨ (3 cấp)
+            </button>
+          </div>
           <textarea
             value={autoFillText}
             onChange={(e) => setAutoFillText(e.target.value)}
@@ -537,7 +706,7 @@ function CreateOrderForm() {
           <button
             onClick={() => {
               if (!autoFillText.trim()) return;
-              handleAutoFill(autoFillText);
+              handleAutoFill(autoFillText, addressLevel);
               setAutoFillText("");
             }}
             disabled={!autoFillText.trim()}
@@ -610,17 +779,38 @@ function CreateOrderForm() {
               <span className="text-gray-400 text-xs">▼</span>
             </button>
           </div>
+          {addressLevel === "3level" && (
+            <div>
+              <label className="text-xs text-muted font-medium">Quận/Huyện</label>
+              <button
+                onClick={() => customerProvince && setAddressPickerField("district")}
+                disabled={!customerProvince}
+                className={`mt-1 w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-amber-300/50 ${!customerProvince ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <span className={customerDistrict ? "text-gray-900" : "text-gray-400"}>
+                  {customerDistrict || (customerProvince ? "Chọn quận/huyện" : "Chọn tỉnh trước")}
+                </span>
+                <span className="text-gray-400 text-xs">▼</span>
+              </button>
+            </div>
+          )}
           <div>
             <label className="text-xs text-muted font-medium">Phường/Xã/Ấp</label>
             <button
               onClick={() => {
-                if (customerProvince) setAddressPickerField("ward");
+                if (addressLevel === "3level") {
+                  if (customerDistrict) setAddressPickerField("ward");
+                } else {
+                  if (customerProvince) setAddressPickerField("ward");
+                }
               }}
-              disabled={!customerProvince}
-              className={`mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 ${!customerProvince ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={addressLevel === "3level" ? !customerDistrict : !customerProvince}
+              className={`mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 ${(addressLevel === "3level" ? !customerDistrict : !customerProvince) ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               <span className={customerWard ? "text-gray-900" : "text-gray-400"}>
-                {customerWard || (customerProvince ? "Chọn phường/xã/ấp" : "Chọn tỉnh trước")}
+                {customerWard || (addressLevel === "3level"
+                  ? (customerDistrict ? "Chọn phường/xã" : "Chọn quận/huyện trước")
+                  : (customerProvince ? "Chọn phường/xã/ấp" : "Chọn tỉnh trước"))}
               </span>
               <span className="text-gray-400 text-xs">▼</span>
             </button>
@@ -1076,15 +1266,25 @@ function CreateOrderForm() {
         open={addressPickerField === "province"}
         onClose={() => setAddressPickerField(null)}
         title="Chọn Tỉnh/Thành phố"
-        items={getProvinceNames()}
+        items={addressLevel === "3level" ? oldProvinces.map((p) => p.name) : getProvinceNames()}
         onSelect={handleProvinceSelect}
       />
+
+      {addressLevel === "3level" && (
+        <AddressPickerModal
+          open={addressPickerField === "district"}
+          onClose={() => setAddressPickerField(null)}
+          title="Chọn Quận/Huyện"
+          items={oldDistricts.map((d) => d.name)}
+          onSelect={handleDistrictSelect}
+        />
+      )}
 
       <AddressPickerModal
         open={addressPickerField === "ward"}
         onClose={() => setAddressPickerField(null)}
         title="Chọn Phường/Xã/Ấp"
-        items={customerProvince ? getWardNames(customerProvince) : []}
+        items={addressLevel === "3level" ? oldWards.map((w) => w.name) : (customerProvince ? getWardNames(customerProvince) : [])}
         onSelect={handleWardSelect}
       />
 
