@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { ProductPickerModal } from "@/components/orders/ProductPickerModal";
 import { AddressPickerModal } from "@/components/orders/AddressPickerModal";
-import { AutoFillModal } from "@/components/orders/AutoFillModal";
+type AddressLevel = "2level" | "3level";
 import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
 import { productService } from "@/services/productService";
@@ -54,6 +54,7 @@ function CreateOrderForm() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerProvince, setCustomerProvince] = useState("");
+  const [customerDistrict, setCustomerDistrict] = useState("");
   const [customerWard, setCustomerWard] = useState("");
   const [notes, setNotes] = useState("");
   const [oldAddressWarning, setOldAddressWarning] = useState<OldAddressWarning | null>(null);
@@ -76,7 +77,8 @@ function CreateOrderForm() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [giftPickerVisible, setGiftPickerVisible] = useState(false);
   const [addressPickerField, setAddressPickerField] = useState<"province" | "ward" | null>(null);
-  const [autoFillVisible, setAutoFillVisible] = useState(false);
+  const [autoFillText, setAutoFillText] = useState("");
+  const [addressLevel, setAddressLevel] = useState<AddressLevel>("2level");
   const [catalogPasteVisible, setCatalogPasteVisible] = useState(false);
   const [catalogPasteText, setCatalogPasteText] = useState("");
 
@@ -116,6 +118,8 @@ function CreateOrderForm() {
       setCustomerPhone(order.customerPhone);
       setCustomerAddress(order.customerAddress);
       setCustomerProvince(order.customerProvince ?? "");
+      setCustomerDistrict(order.customerDistrict ?? "");
+      if (order.customerDistrict) setAddressLevel("3level");
       setCustomerWard(order.customerWard ?? "");
       setNotes(order.notes);
       setDiscountType(order.discountType);
@@ -236,7 +240,7 @@ function CreateOrderForm() {
     setGiftItems((prev) => prev.filter((i) => itemKey(i) !== key));
   };
 
-  const handleAutoFill = (text: string) => {
+  const handleAutoFill = (text: string, addressLevel: AddressLevel = '2level') => {
     const result = parseCustomerText(text);
     if (result.name) setCustomerName(result.name);
     if (result.phone) setCustomerPhone(result.phone);
@@ -245,6 +249,11 @@ function CreateOrderForm() {
     const addrResult = lookupAddress(addrSource);
     if (addrResult.province) setCustomerProvince(addrResult.province);
     if (addrResult.ward) setCustomerWard(addrResult.ward);
+    if (addressLevel === '3level' && addrResult.district) {
+      setCustomerDistrict(addrResult.district);
+    } else {
+      setCustomerDistrict('');
+    }
     setOldAddressWarning(detectOldAddress(addrSource));
   };
 
@@ -354,7 +363,7 @@ function CreateOrderForm() {
         customerPhone: customerPhone.trim(),
         customerAddress: customerAddress.trim(),
         customerProvince: customerProvince.trim(),
-        customerDistrict: "",
+        customerDistrict: customerDistrict.trim(),
         customerWard: customerWard.trim(),
         notes: notes.trim(),
         paymentMethod,
@@ -516,14 +525,57 @@ function CreateOrderForm() {
 
       {/* Customer info */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">Thông tin khách hàng</h3>
-          <button
-            onClick={() => setAutoFillVisible(true)}
-            className="text-xs font-semibold text-primary hover:underline"
-          >
-            Tự điền
-          </button>
+        <h3 className="text-sm font-bold text-gray-900">Thông tin khách hàng</h3>
+
+        {/* Inline auto-fill */}
+        <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+          <p className="text-xs text-muted">
+            Dán thông tin khách (tên, SĐT, địa chỉ) từ Zalo/Facebook:
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setAddressLevel("2level"); setCustomerDistrict(""); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                addressLevel === "2level"
+                  ? "bg-primary text-white"
+                  : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-100"
+              }`}
+            >
+              Địa chỉ MỚI (2 cấp)
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddressLevel("3level")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                addressLevel === "3level"
+                  ? "bg-amber-500 text-white"
+                  : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-100"
+              }`}
+            >
+              Địa chỉ CŨ (3 cấp)
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <textarea
+              value={autoFillText}
+              onChange={(e) => setAutoFillText(e.target.value)}
+              placeholder={"VD:\nNguyễn Văn A\n0901234567\n123 đường ABC, Phường 1, TP. Hồ Chí Minh"}
+              rows={3}
+              className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+            />
+            <button
+              onClick={() => {
+                if (!autoFillText.trim()) return;
+                handleAutoFill(autoFillText, addressLevel);
+                setAutoFillText("");
+              }}
+              disabled={!autoFillText.trim()}
+              className="self-end px-4 py-2 rounded-lg text-xs font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 whitespace-nowrap"
+            >
+              Tự động điền
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -589,6 +641,17 @@ function CreateOrderForm() {
               <span className="text-gray-400 text-xs">▼</span>
             </button>
           </div>
+          {addressLevel === "3level" && (
+            <div>
+              <label className="text-xs text-muted font-medium">Quận/Huyện (địa chỉ cũ)</label>
+              <input
+                value={customerDistrict}
+                onChange={(e) => setCustomerDistrict(e.target.value)}
+                placeholder="Quận/Huyện"
+                className="mt-1 w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300/50"
+              />
+            </div>
+          )}
           <div>
             <label className="text-xs text-muted font-medium">Phường/Xã/Ấp</label>
             <button
@@ -1063,12 +1126,6 @@ function CreateOrderForm() {
         title="Chọn Phường/Xã/Ấp"
         items={customerProvince ? getWardNames(customerProvince) : []}
         onSelect={handleWardSelect}
-      />
-
-      <AutoFillModal
-        open={autoFillVisible}
-        onClose={() => setAutoFillVisible(false)}
-        onConfirm={handleAutoFill}
       />
 
       {/* Catalog paste modal */}

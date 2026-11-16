@@ -296,6 +296,7 @@ function matchWardGlobal(tokens: string[]): { province: Province; ward: string; 
 export interface AddressLookupResult {
   province: string;
   ward: string;
+  district: string;
 }
 
 function formatProvinceName(p: Province): string {
@@ -309,8 +310,36 @@ function findProvince(name: string): Province | undefined {
   return provinces.find(pr => pr.n === stripped || pr.n === name);
 }
 
+function extractDistrictFromAddress(address: string): string {
+  const patterns = [
+    /(?:Quận\s*)(\d+)/i,
+    /(Quận\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*(?:\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*)*)/i,
+    /(Huyện\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*(?:\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*)*)/i,
+    /(Thành\s+phố\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*(?:\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*)*)/i,
+    /(Thị\s+xã\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*(?:\s+[A-ZÀ-Ỹa-zà-ỹ][a-zà-ỹ]*)*)/i,
+  ];
+  for (const re of patterns) {
+    const m = address.match(re);
+    if (m) {
+      if (/^Quận\s*\d+$/i.test(m[0])) return m[0].replace(/\s+/g, ' ').trim();
+      return m[1]?.trim() || m[0].trim();
+    }
+  }
+  return '';
+}
+
+function extractDistrictFromWard(wardName: string): string {
+  // "Phường 3 Bảo Lộc" → "Bảo Lộc"
+  const numMatch = wardName.match(/^(?:Phường|Xã|Thị trấn)\s+\d+\s+(.+)$/);
+  if (numMatch) return numMatch[1].trim();
+  // "Phường Lâm Viên - Đà Lạt" → "Đà Lạt"
+  const dashMatch = wardName.match(/^(?:Phường|Xã|Thị trấn)\s+.+\s+-\s+(.+)$/);
+  if (dashMatch) return dashMatch[1].trim();
+  return '';
+}
+
 export function lookupAddress(address: string): AddressLookupResult {
-  const empty: AddressLookupResult = { province: '', ward: '' };
+  const empty: AddressLookupResult = { province: '', ward: '', district: '' };
   if (!address || !address.trim()) return empty;
 
   const expanded = expandAbbreviations(address);
@@ -318,7 +347,7 @@ export function lookupAddress(address: string): AddressLookupResult {
 
   if (tokens.length === 0) return empty;
 
-  const result: AddressLookupResult = { province: '', ward: '' };
+  const result: AddressLookupResult = { province: '', ward: '', district: '' };
 
   const pMatch = matchProvince(tokens);
 
@@ -332,6 +361,12 @@ export function lookupAddress(address: string): AddressLookupResult {
     if (!globalMatch) return empty;
     result.province = formatProvinceName(globalMatch.province);
     result.ward = globalMatch.ward;
+  }
+
+  // Extract district: first try from address text, then from matched ward name
+  result.district = extractDistrictFromAddress(expanded);
+  if (!result.district && result.ward) {
+    result.district = extractDistrictFromWard(result.ward);
   }
 
   return result;
