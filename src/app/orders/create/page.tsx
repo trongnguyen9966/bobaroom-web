@@ -4,7 +4,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { ProductPickerModal } from "@/components/orders/ProductPickerModal";
 import { AddressPickerModal } from "@/components/orders/AddressPickerModal";
-type AddressLevel = "2level" | "3level";
 import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
 import { productService } from "@/services/productService";
@@ -78,7 +77,6 @@ function CreateOrderForm() {
   const [giftPickerVisible, setGiftPickerVisible] = useState(false);
   const [addressPickerField, setAddressPickerField] = useState<"province" | "ward" | null>(null);
   const [autoFillText, setAutoFillText] = useState("");
-  const [addressLevel, setAddressLevel] = useState<AddressLevel>("2level");
   const [catalogPasteVisible, setCatalogPasteVisible] = useState(false);
   const [catalogPasteText, setCatalogPasteText] = useState("");
 
@@ -119,7 +117,6 @@ function CreateOrderForm() {
       setCustomerAddress(order.customerAddress);
       setCustomerProvince(order.customerProvince ?? "");
       setCustomerDistrict(order.customerDistrict ?? "");
-      if (order.customerDistrict) setAddressLevel("3level");
       setCustomerWard(order.customerWard ?? "");
       setNotes(order.notes);
       setDiscountType(order.discountType);
@@ -240,20 +237,17 @@ function CreateOrderForm() {
     setGiftItems((prev) => prev.filter((i) => itemKey(i) !== key));
   };
 
-  const handleAutoFill = (text: string, addressLevel: AddressLevel = '2level') => {
+  const handleAutoFill = (text: string) => {
     const result = parseCustomerText(text);
     if (result.name) setCustomerName(result.name);
     if (result.phone) setCustomerPhone(result.phone);
     if (result.address) setCustomerAddress(result.address);
     const addrSource = result.address || text;
+
     const addrResult = lookupAddress(addrSource);
     if (addrResult.province) setCustomerProvince(addrResult.province);
     if (addrResult.ward) setCustomerWard(addrResult.ward);
-    if (addressLevel === '3level' && addrResult.district) {
-      setCustomerDistrict(addrResult.district);
-    } else {
-      setCustomerDistrict('');
-    }
+    setCustomerDistrict('');
     setOldAddressWarning(detectOldAddress(addrSource));
   };
 
@@ -300,7 +294,8 @@ function CreateOrderForm() {
 
   const handleProvinceSelect = (province: string) => {
     setCustomerProvince(province);
-    setCustomerWard(""); // Reset ward when province changes
+    setCustomerWard("");
+    setCustomerDistrict("");
     setAddressPickerField(null);
   };
 
@@ -532,50 +527,24 @@ function CreateOrderForm() {
           <p className="text-xs text-muted">
             Dán thông tin khách (tên, SĐT, địa chỉ) từ Zalo/Facebook:
           </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => { setAddressLevel("2level"); setCustomerDistrict(""); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                addressLevel === "2level"
-                  ? "bg-primary text-white"
-                  : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-100"
-              }`}
-            >
-              Địa chỉ MỚI (2 cấp)
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddressLevel("3level")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                addressLevel === "3level"
-                  ? "bg-amber-500 text-white"
-                  : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-100"
-              }`}
-            >
-              Địa chỉ CŨ (3 cấp)
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <textarea
-              value={autoFillText}
-              onChange={(e) => setAutoFillText(e.target.value)}
-              placeholder={"VD:\nNguyễn Văn A\n0901234567\n123 đường ABC, Phường 1, TP. Hồ Chí Minh"}
-              rows={3}
-              className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
-            />
-            <button
-              onClick={() => {
-                if (!autoFillText.trim()) return;
-                handleAutoFill(autoFillText, addressLevel);
-                setAutoFillText("");
-              }}
-              disabled={!autoFillText.trim()}
-              className="self-end px-4 py-2 rounded-lg text-xs font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 whitespace-nowrap"
-            >
-              Tự động điền
-            </button>
-          </div>
+          <textarea
+            value={autoFillText}
+            onChange={(e) => setAutoFillText(e.target.value)}
+            placeholder={"VD:\nNguyễn Văn A\n0901234567\n123 đường ABC, Phường 1, TP. Hồ Chí Minh"}
+            rows={4}
+            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+          />
+          <button
+            onClick={() => {
+              if (!autoFillText.trim()) return;
+              handleAutoFill(autoFillText);
+              setAutoFillText("");
+            }}
+            disabled={!autoFillText.trim()}
+            className="w-full py-2.5 rounded-lg text-xs font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50"
+          >
+            Tự động điền
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -641,21 +610,12 @@ function CreateOrderForm() {
               <span className="text-gray-400 text-xs">▼</span>
             </button>
           </div>
-          {addressLevel === "3level" && (
-            <div>
-              <label className="text-xs text-muted font-medium">Quận/Huyện (địa chỉ cũ)</label>
-              <input
-                value={customerDistrict}
-                onChange={(e) => setCustomerDistrict(e.target.value)}
-                placeholder="Quận/Huyện"
-                className="mt-1 w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300/50"
-              />
-            </div>
-          )}
           <div>
             <label className="text-xs text-muted font-medium">Phường/Xã/Ấp</label>
             <button
-              onClick={() => customerProvince && setAddressPickerField("ward")}
+              onClick={() => {
+                if (customerProvince) setAddressPickerField("ward");
+              }}
               disabled={!customerProvince}
               className={`mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 ${!customerProvince ? "opacity-50 cursor-not-allowed" : ""}`}
             >

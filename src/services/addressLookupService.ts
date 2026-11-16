@@ -338,6 +338,17 @@ function extractDistrictFromWard(wardName: string): string {
   return '';
 }
 
+// Strip embedded district from ward name: "Phường 3 Bảo Lộc" → "Phường 3"
+function stripDistrictFromWard(wardName: string): string {
+  // "Phường 3 Bảo Lộc" → "Phường 3"
+  const numMatch = wardName.match(/^((?:Phường|Xã|Thị trấn)\s+\d+)\s+.+$/);
+  if (numMatch) return numMatch[1].trim();
+  // "Phường Lâm Viên - Đà Lạt" → "Phường Lâm Viên"
+  const dashMatch = wardName.match(/^((?:Phường|Xã|Thị trấn)\s+.+?)\s+-\s+.+$/);
+  if (dashMatch) return dashMatch[1].trim();
+  return wardName;
+}
+
 export function lookupAddress(address: string): AddressLookupResult {
   const empty: AddressLookupResult = { province: '', ward: '', district: '' };
   if (!address || !address.trim()) return empty;

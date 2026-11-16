@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
 import { orderService } from "@/services/orderService";
 import { inventoryService } from "@/services/inventoryService";
-import { exportSPXToXlsx, SpxAddressFormat } from "@/services/spxXlsxService";
+import { exportSPXToXlsx } from "@/services/spxXlsxService";
 import {
   DateFilter,
   OrderStatus,
@@ -242,13 +242,12 @@ export default function OrdersPage() {
     alert(`Đã sao chép ${selected.length} đơn hàng`);
   };
 
-  const handleExportXlsx = async (format: SpxAddressFormat) => {
+  const handleExportXlsx = async () => {
     if (selectedIds.size === 0 || exporting) return;
     setExporting(true);
     try {
-      const { count } = await exportSPXToXlsx(Array.from(selectedIds), format);
-      const label = format === '3level' ? '3 cấp' : '2 cấp';
-      alert(`Đã tạo file Excel SPX ${label} (${count} đơn)`);
+      const { count } = await exportSPXToXlsx(Array.from(selectedIds));
+      alert(`Đã tạo file Excel SPX (${count} đơn)`);
     } catch {
       alert("Không thể tạo file Excel");
     } finally {
@@ -393,18 +392,11 @@ export default function OrdersPage() {
             Sao chép
           </button>
           <button
-            onClick={() => handleExportXlsx('2level')}
+            onClick={handleExportXlsx}
             disabled={exporting}
             className="px-3 py-2.5 rounded-lg bg-green-600 text-sm font-semibold hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
           >
-            {exporting ? "..." : "SPX mới"}
-          </button>
-          <button
-            onClick={() => handleExportXlsx('3level')}
-            disabled={exporting}
-            className="px-3 py-2.5 rounded-lg bg-amber-600 text-sm font-semibold hover:bg-amber-700 active:bg-amber-800 disabled:opacity-50"
-          >
-            {exporting ? "..." : "SPX cũ"}
+            {exporting ? "..." : "SPX"}
           </button>
           <button
             onClick={() => setBulkStatusVisible(true)}
