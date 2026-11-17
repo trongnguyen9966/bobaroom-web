@@ -157,7 +157,13 @@ export default function OrderDetailPage() {
       const extra: Parameters<typeof orderService.updateStatus>[2] = {};
       if (next === "shipped") {
         extra.shippedAt = Date.now();
-        extra.lockedTotal = order.total;
+        const settings = await settingsService.get();
+        extra.lockedTotal = (settings.priceRoundingEnabled && settings.priceRoundingMode && order.orderType === 'normal')
+          ? settingsService.applyRounding(order.total, settings.priceRoundingMode)
+          : order.total;
+        extra.lockedShippingCost = (settings.actualShippingFeeEnabled && order.orderType === 'normal')
+          ? (settings.actualShippingFee ?? 0)
+          : 0;
       }
       await orderService.updateStatus(id, next, extra);
       await load();
@@ -227,6 +233,23 @@ export default function OrderDetailPage() {
         await orderService.updateCreatedAt(id, now);
       }
 
+      // Check if order has waiting items and set waiting status
+      if (settings.waitingOrderEnabled && settings.waitingOrderCategoryIds?.length > 0) {
+        const orderItems = await orderService.getItems(id);
+        let hasWaitingItems = false;
+        for (const item of orderItems) {
+          if (item.isGift) continue;
+          const product = await productService.getById(item.productId);
+          if (product?.categoryId && settings.waitingOrderCategoryIds.includes(product.categoryId)) {
+            hasWaitingItems = true;
+            break;
+          }
+        }
+        if (hasWaitingItems) {
+          await orderService.setWaitingStatus(id, true);
+        }
+      }
+
       await load();
     } catch {
       alert("Không thể xác nhận đơn hàng");
@@ -240,8 +263,38 @@ export default function OrderDetailPage() {
     if (!confirm("Bạn có chắc muốn hủy đơn hàng này?")) return;
     setActionLoading(true);
     try {
-      if (["confirmed", "preparing", "packed", "shipped"].includes(order.status)) {
-        await inventoryService.restoreStock(order.items);
+      // If this main order has an active exchange order, cancel it first and restore items
+      if (order.exchangeOrderId) {
+        const exchangeOrder = await orderService.getById(order.exchangeOrderId);
+        if (exchangeOrder && exchangeOrder.status !== 'cancelled') {
+          const newExItems = exchangeOrder.items.filter((i) => !i.isExchangeReturn);
+          if (newExItems.length > 0) {
+            await inventoryService.restoreStock(newExItems);
+          }
+          // If exchange was received (preparing+), old items stock was already
+          // restored. Re-deduct so cancelExchange + main restore nets correctly.
+          if (exchangeOrder.status !== 'confirmed') {
+            const oldExItems = exchangeOrder.items.filter((i) => i.isExchangeReturn);
+            if (oldExItems.length > 0) {
+              await inventoryService.deductStock(
+                oldExItems.map((i) => ({ ...i, isExchangeReturn: false })),
+              );
+            }
+          }
+          await orderService.cancelExchange(order.exchangeOrderId);
+          const refreshed = await orderService.getById(id);
+          if (refreshed && ["confirmed", "preparing", "packed", "shipped"].includes(refreshed.status)) {
+            await inventoryService.restoreStock(refreshed.items);
+          }
+        } else {
+          if (["confirmed", "preparing", "packed", "shipped"].includes(order.status)) {
+            await inventoryService.restoreStock(order.items);
+          }
+        }
+      } else {
+        if (["confirmed", "preparing", "packed", "shipped"].includes(order.status)) {
+          await inventoryService.restoreStock(order.items);
+        }
       }
       await orderService.updateStatus(id, "cancelled");
       await load();
@@ -275,6 +328,21 @@ export default function OrderDetailPage() {
     setActionLoading(true);
     try {
       await orderService.updatePaymentMethod(id, method);
+      if (order) {
+        const settings = await settingsService.get();
+        if (settings.freeShippingEnabled) {
+          const subtotalAfterDiscount = order.subtotal - order.discountAmount;
+          const methodMatches =
+            settings.freeShippingPaymentMethod === 'both' ||
+            (settings.freeShippingPaymentMethod === 'cod' && method === 'cod') ||
+            (settings.freeShippingPaymentMethod === 'paid' && method !== 'cod');
+          if (subtotalAfterDiscount >= settings.freeShippingThreshold && methodMatches) {
+            await orderService.applyFreeShipping(id);
+          } else if (order.shippingFee === 0) {
+            alert('Đơn không còn đủ điều kiện miễn phí ship. Vui lòng cập nhật lại phí vận chuyển nếu cần.');
+          }
+        }
+      }
       await load();
     } catch {
       alert("Không thể cập nhật phương thức thanh toán");
@@ -363,10 +431,9 @@ export default function OrderDetailPage() {
 
   const toggleExchangeItem = (itemId: string) => {
     setExchangeOldItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
+      // Single choice: select or deselect
+      if (prev.has(itemId)) return new Set();
+      return new Set([itemId]);
     });
   };
 
@@ -414,6 +481,11 @@ export default function OrderDetailPage() {
 
   const handleExchangeConfirm = async () => {
     if (!order || exchangeNewProducts.length === 0 || capturedOldItemsData.length === 0) return;
+    const missingSize = exchangeNewProducts.find((e) => (e.product.sizes ?? []).length > 0 && !e.selectedSize);
+    if (missingSize) {
+      alert(`Vui lòng chọn size cho "${missingSize.product.name}"`);
+      return;
+    }
     setExchangeCreating(true);
     try {
       // 1. Remove old items from main order
@@ -447,8 +519,7 @@ export default function OrderDetailPage() {
       });
       const { success } = await inventoryService.deductStock(newOrderItems);
       if (!success) {
-        // Rollback: cancel exchange to restore old items to main order
-        await inventoryService.restoreStock(newOrderItems);
+        // deductStock is atomic — nothing was deducted, so just cancel exchange
         await orderService.cancelExchange(exchangeOrderId);
         alert("Không đủ tồn kho cho sản phẩm mới. Đơn đổi đã bị hủy.");
         await load();
@@ -493,6 +564,17 @@ export default function OrderDetailPage() {
       if (newItems.length > 0) {
         await inventoryService.restoreStock(newItems);
       }
+      // If exchange was received (preparing+), old items stock was already
+      // restored in handleExchangeReceived. Re-deduct so the main order
+      // still "owns" the stock deduction from its original confirm.
+      if (order.status !== 'confirmed') {
+        const oldItems = order.items.filter((i) => i.isExchangeReturn);
+        if (oldItems.length > 0) {
+          await inventoryService.deductStock(
+            oldItems.map((i) => ({ ...i, isExchangeReturn: false })),
+          );
+        }
+      }
       await orderService.cancelExchange(order.id);
       router.push("/orders");
     } catch {
@@ -521,12 +603,12 @@ export default function OrderDetailPage() {
     );
   }
 
-  const canEdit = ["draft", "confirmed"].includes(order.status);
+  const isExchangeOrder = !!order.exchangeFromOrderId;
+  const canEdit = ["draft", "confirmed"].includes(order.status) && !isExchangeOrder;
   const canAdvance = !!NEXT_STATUS[order.status] && !order.isWaiting;
-  const canCancel = ["confirmed", "preparing", "packed"].includes(order.status);
+  const canCancel = ["confirmed", "preparing", "packed", "shipped"].includes(order.status);
   const isDraft = order.status === "draft";
   const displayTotal = order.lockedTotal ?? order.total;
-  const isExchangeOrder = !!order.exchangeFromOrderId;
 
   const filteredProducts = productSearch.trim()
     ? allProducts.filter((p) =>

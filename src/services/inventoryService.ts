@@ -120,9 +120,9 @@ export const inventoryService = {
     const productSnaps = await Promise.all(
       productIds.map((pid) => getDoc(doc(db, PRODUCTS, pid))),
     );
-    const stockMap = new Map<string, number>();
+    const productDataMap = new Map<string, Record<string, unknown>>();
     productSnaps.forEach((snap) => {
-      if (snap.exists()) stockMap.set(snap.id, snap.data()!.stock as number);
+      if (snap.exists()) productDataMap.set(snap.id, snap.data()!);
     });
 
     const draftSnap = await getDocs(
@@ -135,16 +135,26 @@ export const inventoryService = {
     for (const orderDoc of draftSnap.docs) {
       if (orderDoc.id === confirmedOrderId) continue;
 
-      const items: Array<{ id: string; productId: string; quantity: number; productName?: string }> =
+      const items: Array<{ id: string; productId: string; quantity: number; productName?: string; selectedSize?: string }> =
         orderDoc.data()?.items ?? [];
 
       const removedNames: string[] = [];
       const keptItems = items.filter((item) => {
         if (!productIds.includes(item.productId)) return true;
-        const stock = stockMap.get(item.productId) ?? 0;
-        if (stock < item.quantity) {
-          removedNames.push(item.productName || nameMap.get(item.productId) || item.productId);
-          return false;
+        const data = productDataMap.get(item.productId);
+        if (!data) return true;
+        if (item.selectedSize && (data.sizes as Array<{ name: string; stock: number }> | undefined)?.length) {
+          const sizeEntry = (data.sizes as Array<{ name: string; stock: number }>).find((s) => s.name === item.selectedSize);
+          if (!sizeEntry || sizeEntry.stock < item.quantity) {
+            removedNames.push(item.productName || nameMap.get(item.productId) || item.productId);
+            return false;
+          }
+        } else {
+          const stock = (data.stock as number) ?? 0;
+          if (stock < item.quantity) {
+            removedNames.push(item.productName || nameMap.get(item.productId) || item.productId);
+            return false;
+          }
         }
         return true;
       });

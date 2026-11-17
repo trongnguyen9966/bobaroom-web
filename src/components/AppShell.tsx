@@ -69,8 +69,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-56 bg-white border-r border-border shrink-0">
         <div className="p-5 border-b border-border">
-          <Link href="/orders" className="text-xl font-bold text-primary">
-            BobaRoom
+          <Link href="/orders" className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full overflow-hidden shrink-0">
+              <img src="/logo-icon.png?v=2" alt="BobaRoom" className="w-full h-full object-cover" />
+            </div>
+            <span className="text-xl font-bold text-primary">BobaRoom</span>
           </Link>
         </div>
         <nav className="flex-1 p-3 space-y-1">

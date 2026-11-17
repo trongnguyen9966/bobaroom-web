@@ -104,6 +104,7 @@ function CreateOrderForm() {
   const [loading, setLoading] = useState(!!editId);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [editingConfirmedOrder, setEditingConfirmedOrder] = useState(false);
+  const [isExchangeOrder, setIsExchangeOrder] = useState(false);
   const sessionIdRef = useRef(generateId());
   // Store original items when editing a confirmed order (for stock diff calculation)
   const originalItemsRef = useRef<{ productId: string; quantity: number; selectedSize?: string }[]>([]);
@@ -170,6 +171,9 @@ function CreateOrderForm() {
       setDiscountValue(order.discountValue > 0 ? String(order.discountValue) : "");
       setShippingFee(order.shippingFee > 0 ? String(order.shippingFee) : "");
       if (order.paymentMethod) setPaymentMethod(order.paymentMethod);
+      if (order.exchangeFromOrderId) {
+        setIsExchangeOrder(true);
+      }
       if (order.status !== "draft") {
         setEditingConfirmedOrder(true);
         originalItemsRef.current = order.items
@@ -832,31 +836,35 @@ function CreateOrderForm() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-gray-900">Sản phẩm ({items.length})</h3>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setCatalogPasteVisible(true)}
-              className="text-xs font-semibold text-orange-500 hover:underline"
-            >
-              Dán đơn catalog
-            </button>
-            <button
-              onClick={() => setPickerVisible(true)}
-              className="text-xs font-semibold text-primary hover:underline"
-            >
-              + Thêm sản phẩm
-            </button>
-          </div>
+          {!isExchangeOrder && (
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCatalogPasteVisible(true)}
+                className="text-xs font-semibold text-orange-500 hover:underline"
+              >
+                Dán đơn catalog
+              </button>
+              <button
+                onClick={() => setPickerVisible(true)}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                + Thêm sản phẩm
+              </button>
+            </div>
+          )}
         </div>
 
         {items.length === 0 ? (
           <div className="px-5 py-8 text-center">
             <p className="text-sm text-muted">Chưa có sản phẩm nào</p>
-            <button
-              onClick={() => setPickerVisible(true)}
-              className="mt-2 text-sm font-semibold text-primary hover:underline"
-            >
-              Thêm sản phẩm
-            </button>
+            {!isExchangeOrder && (
+              <button
+                onClick={() => setPickerVisible(true)}
+                className="mt-2 text-sm font-semibold text-primary hover:underline"
+              >
+                Thêm sản phẩm
+              </button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
@@ -945,23 +953,27 @@ function CreateOrderForm() {
         <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
           <div className="px-5 py-3 border-b border-green-100 flex items-center justify-between bg-green-50/50">
             <h3 className="text-sm font-bold text-green-600">Quà tặng kèm ({giftItems.length})</h3>
-            <button
-              onClick={() => setGiftPickerVisible(true)}
-              className="text-xs font-semibold text-green-600 hover:underline"
-            >
-              + Thêm quà tặng
-            </button>
+            {!isExchangeOrder && (
+              <button
+                onClick={() => setGiftPickerVisible(true)}
+                className="text-xs font-semibold text-green-600 hover:underline"
+              >
+                + Thêm quà tặng
+              </button>
+            )}
           </div>
 
           {giftItems.length === 0 ? (
             <div className="px-5 py-6 text-center">
               <p className="text-sm text-muted">Chưa có quà tặng</p>
-              <button
-                onClick={() => setGiftPickerVisible(true)}
-                className="mt-1.5 text-sm font-semibold text-green-600 hover:underline"
-              >
-                Thêm quà tặng
-              </button>
+              {!isExchangeOrder && (
+                <button
+                  onClick={() => setGiftPickerVisible(true)}
+                  className="mt-1.5 text-sm font-semibold text-green-600 hover:underline"
+                >
+                  Thêm quà tặng
+                </button>
+              )}
             </div>
           ) : (
             <div className="divide-y divide-green-50">
