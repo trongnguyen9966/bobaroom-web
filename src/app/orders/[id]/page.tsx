@@ -86,6 +86,8 @@ export default function OrderDetailPage() {
   const [changePaymentOpen, setChangePaymentOpen] = useState(false);
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [hasMissingSize, setHasMissingSize] = useState(false);
+  const [missingSizeProductIds, setMissingSizeProductIds] = useState<Set<string>>(new Set());
 
   // Exchange flow states
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
@@ -118,6 +120,21 @@ export default function OrderDetailPage() {
     });
     return () => unsub();
   }, [id]);
+
+  // Check missing sizes
+  useEffect(() => {
+    if (!order || order.status !== 'draft') { setHasMissingSize(false); return; }
+    const itemsNoSize = order.items.filter((i) => !i.selectedSize);
+    if (itemsNoSize.length === 0) { setHasMissingSize(false); return; }
+    // Check if any of these products actually have sizes defined
+    const productIds = [...new Set(itemsNoSize.map((i) => i.productId))];
+    Promise.all(productIds.map((pid) => productService.getById(pid))).then((products) => {
+      const ids = new Set<string>();
+      products.forEach((p) => { if (p && (p.sizes ?? []).length > 0) ids.add(p.id); });
+      setMissingSizeProductIds(ids);
+      setHasMissingSize(ids.size > 0);
+    });
+  }, [order]);
 
   // Load settings for exchange
   useEffect(() => {
@@ -747,8 +764,10 @@ export default function OrderDetailPage() {
           <h3 className="text-sm font-bold text-gray-900">Sản phẩm ({order.items.length})</h3>
         </div>
         <div className="divide-y divide-gray-50">
-          {order.items.map((item) => (
-            <div key={item.id} className="px-5 py-3 flex items-start gap-3">
+          {order.items.map((item) => {
+            const itemMissingSize = !item.selectedSize && missingSizeProductIds.has(item.productId);
+            return (
+            <div key={item.id} className={`px-5 py-3 flex items-start gap-3 ${itemMissingSize ? "bg-red-50/50 border-l-2 border-l-red-400" : ""}`}>
               {item.productImageUri && (
                 <img
                   src={item.productImageUri}
@@ -775,6 +794,11 @@ export default function OrderDetailPage() {
                     Quà tặng
                   </span>
                 )}
+                {itemMissingSize && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200 inline-block mt-0.5">
+                    Chưa chọn size
+                  </span>
+                )}
               </div>
               <div className="text-right shrink-0">
                 <p className="text-sm font-semibold text-gray-900">
@@ -783,7 +807,8 @@ export default function OrderDetailPage() {
                 <p className="text-xs text-muted">x{item.quantity}</p>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
 
@@ -896,6 +921,11 @@ export default function OrderDetailPage() {
           </button>
         ) : (
           <>
+            {isDraft && hasMissingSize && (
+              <div className="w-full p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs text-center">
+                ⚠ Có sản phẩm chưa chọn size — cần chỉnh sửa đơn trước khi xác nhận
+              </div>
+            )}
             {isDraft && (
               <button
                 onClick={() => {
@@ -903,10 +933,14 @@ export default function OrderDetailPage() {
                     alert("Vui lòng thêm sản phẩm trước khi xác nhận");
                     return;
                   }
+                  if (hasMissingSize) {
+                    alert("Có sản phẩm chưa chọn size. Vui lòng chỉnh sửa đơn để chọn size trước khi xác nhận.");
+                    return;
+                  }
                   setPaymentConfirmOpen(true);
                 }}
-                disabled={actionLoading}
-                className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover disabled:opacity-50 shadow-sm"
+                disabled={actionLoading || hasMissingSize}
+                className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm ${hasMissingSize ? 'bg-gray-300 cursor-not-allowed' : 'bg-primary hover:bg-primary-hover disabled:opacity-50'}`}
               >
                 Xác nhận đơn hàng
               </button>

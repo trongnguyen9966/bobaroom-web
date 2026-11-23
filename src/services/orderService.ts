@@ -79,6 +79,7 @@ function mapDoc(snap: { id: string; data(): Record<string, any> | undefined }): 
     exchangePriceDiff: d.exchangePriceDiff ?? 0,
     deposit: d.deposit ?? 0,
     isWaiting: d.isWaiting ?? false,
+    hasMissingSize: d.hasMissingSize ?? false,
     editingBy: d.editingBy ?? null,
   };
 }
@@ -211,6 +212,9 @@ export const orderService = {
       exchangeFromOrderId: data.exchangeFromOrderId ?? null,
       exchangeCost: data.exchangeCost ?? 0,
       exchangePriceDiff: 0,
+      isWaiting: false,
+      hasMissingSize: data.hasMissingSize ?? false,
+      editingBy: null,
       items,
     };
 
@@ -247,6 +251,7 @@ export const orderService = {
       exchangeCost: data.exchangeCost ?? 0,
       exchangePriceDiff: 0,
       isWaiting: false,
+      hasMissingSize: data.hasMissingSize ?? false,
       editingBy: null,
     };
   },
@@ -319,6 +324,7 @@ export const orderService = {
       platformFeeType: data.platformFeeType ?? 'percent',
       platformFeeValue: data.platformFeeValue ?? 0,
       deposit: data.deposit ?? 0,
+      hasMissingSize: data.hasMissingSize ?? false,
       items,
       updatedAt: now,
     };

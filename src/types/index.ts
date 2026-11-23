@@ -133,6 +133,7 @@ export interface Order {
   exchangePriceDiff: number;
   deposit: number;
   isWaiting: boolean;
+  hasMissingSize: boolean;
   editingBy: string | null;
 }
 
@@ -189,6 +190,7 @@ export interface CreateOrderDTO {
   deposit?: number;
   exchangeFromOrderId?: string | null;
   exchangeCost?: number;
+  hasMissingSize?: boolean;
   items: {
     productId: string;
     quantity: number;

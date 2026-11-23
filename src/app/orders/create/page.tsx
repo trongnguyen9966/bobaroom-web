@@ -447,10 +447,11 @@ function CreateOrderForm() {
       alert("Vui lòng nhập tên khách hàng");
       return;
     }
-    const missingSizeItem = [...items, ...giftItems].find((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
-    if (missingSizeItem) {
-      alert(`Vui lòng chọn size cho "${missingSizeItem.product.name}"`);
-      return;
+    const missingSizeItems = [...items, ...giftItems].filter((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
+    if (missingSizeItems.length > 0) {
+      const names = missingSizeItems.map((i) => `"${i.product.name}"`).join(", ");
+      const ok = confirm(`${names} chưa chọn size. Lưu đơn nháp không có size?\n\n(Bạn sẽ không thể xác nhận đơn cho đến khi chọn size)`);
+      if (!ok) return;
     }
 
     setSaving(true);
@@ -472,6 +473,7 @@ function CreateOrderForm() {
         platformFeeType,
         platformFeeValue: platformFeeNum,
         deposit: depositNum,
+        hasMissingSize: missingSizeItems.length > 0,
         items: allItems.map((i) => {
           const sizePrice = i.selectedSize
             ? (i.product.sizes?.find((s) => s.name === i.selectedSize)?.price ?? i.product.price)

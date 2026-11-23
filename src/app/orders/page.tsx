@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { OrderStatusBadge, getStatusLabel } from "@/components/ui/OrderStatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
+import { CalendarPicker } from "@/components/dashboard/CalendarPicker";
 import { orderService } from "@/services/orderService";
 import { inventoryService } from "@/services/inventoryService";
 import { exportSPXToXlsx } from "@/services/spxXlsxService";
@@ -25,17 +26,22 @@ function getRange(filter: DateFilter): [number, number] {
   const d = filter.date;
   if (filter.mode === "day") return [getStartOfDay(d).getTime(), getEndOfDay(d).getTime()];
   if (filter.mode === "month") return [getStartOfMonth(d).getTime(), getEndOfMonth(d).getTime()];
+  if (filter.mode === "custom" && filter.endDate) return [getStartOfDay(d).getTime(), getEndOfDay(filter.endDate).getTime()];
   return [getStartOfYear(d).getTime(), getEndOfYear(d).getTime()];
 }
 
 function getFilterLabel(filter: DateFilter): string {
   const d = filter.date;
+  const fmt = (date: Date) => new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
   if (filter.mode === "day") {
     if (d.toDateString() === new Date().toDateString()) return "Hôm nay";
-    return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+    return fmt(d);
   }
   if (filter.mode === "month") {
     return new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" }).format(d);
+  }
+  if (filter.mode === "custom" && filter.endDate) {
+    return `${fmt(d)} - ${fmt(filter.endDate)}`;
   }
   return `Năm ${d.getFullYear()}`;
 }
@@ -257,17 +263,6 @@ export default function OrdersPage() {
 
   const totalOrderCount = sections.reduce((acc, s) => acc + s.data.length, 0);
 
-  // Date navigation for filter modal
-  const navigateDate = (direction: -1 | 1) => {
-    setPendingFilter((prev) => {
-      const d = new Date(prev.date);
-      if (prev.mode === "day") d.setDate(d.getDate() + direction);
-      else if (prev.mode === "month") d.setMonth(d.getMonth() + direction);
-      else d.setFullYear(d.getFullYear() + direction);
-      return { ...prev, date: d };
-    });
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -462,35 +457,8 @@ export default function OrdersPage() {
           {/* Date filter */}
           <div>
             <label className="text-xs font-semibold text-muted uppercase tracking-wide">Thời gian</label>
-            <div className="flex gap-2 mt-2">
-              {(["day", "month", "year"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setPendingFilter((f) => ({ ...f, mode }))}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                    pendingFilter.mode === mode ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
-                  }`}
-                >
-                  {mode === "day" ? "Ngày" : mode === "month" ? "Tháng" : "Năm"}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-3 mt-3">
-              <button onClick={() => navigateDate(-1)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200">
-                &lt;
-              </button>
-              <span className="flex-1 text-center text-sm font-medium">
-                {getFilterLabel(pendingFilter)}
-              </span>
-              <button onClick={() => navigateDate(1)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200">
-                &gt;
-              </button>
-              <button
-                onClick={() => setPendingFilter((f) => ({ ...f, date: new Date() }))}
-                className="text-xs text-primary font-semibold"
-              >
-                Hôm nay
-              </button>
+            <div className="mt-2">
+              <CalendarPicker filter={pendingFilter} onChange={setPendingFilter} />
             </div>
           </div>
 
@@ -572,8 +540,10 @@ function OrderCard({
 }) {
   const content = (
     <div
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 border-l-4 overflow-hidden transition-colors ${
-        isSelected ? "bg-blue-50 border-l-primary" : `border-status-${order.status}`
+      className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-colors ${
+        order.hasMissingSize && order.status === 'draft'
+          ? "border-red-300 border-l-4 border-l-red-400 bg-red-50/30"
+          : `border-gray-100 border-l-4 ${isSelected ? "bg-blue-50 border-l-primary" : `border-status-${order.status}`}`
       } ${order.isWaiting ? "bg-amber-50" : ""}`}
     >
       <div className="p-3.5 sm:p-4">
@@ -600,6 +570,11 @@ function OrderCard({
             {order.isWaiting && (
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 inline-block mt-1 ml-1">
                 Đang chờ
+              </span>
+            )}
+            {order.hasMissingSize && order.status === 'draft' && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200 inline-block mt-1 ml-1">
+                Thiếu size
               </span>
             )}
           </div>
