@@ -18,6 +18,7 @@ import {
   setDoc,
   where,
   orderBy,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { OrderStatus, OrderSummary, RevenueStats } from '@/types';
@@ -247,6 +248,7 @@ async function rebuildDayFromTimestamp(ts: number): Promise<void> {
 
 /**
  * Rebuild all daily docs in a date range (for migration).
+ * Optimized: 1 query for all orders + 1 settings read + 1 batch write.
  * Returns the number of days rebuilt.
  */
 async function rebuildRange(startMs: number, endMs: number, onProgress?: (done: number, total: number) => void): Promise<number> {
@@ -255,6 +257,28 @@ async function rebuildRange(startMs: number, endMs: number, onProgress?: (done: 
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
 
+  // 1 query: all orders in range
+  const snap = await getDocs(
+    query(
+      collection(db, 'orders'),
+      where('createdAt', '>=', start.getTime()),
+      where('createdAt', '<=', end.getTime()),
+      orderBy('createdAt', 'desc'),
+    ),
+  );
+  const allOrders = snap.docs
+    .map((d) => mapDocToSummary(d as unknown as { id: string; data(): Record<string, any> }))
+    .filter((o) => o.status !== 'deleted');
+
+  // Group orders by date key
+  const byDay = new Map<string, OrderSummary[]>();
+  for (const o of allOrders) {
+    const key = timestampToKey(o.createdAt);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(o);
+  }
+
+  // Build list of all days in range (including days with 0 orders)
   const days: string[] = [];
   const current = new Date(start);
   while (current <= end) {
@@ -262,10 +286,23 @@ async function rebuildRange(startMs: number, endMs: number, onProgress?: (done: 
     current.setDate(current.getDate() + 1);
   }
 
-  for (let i = 0; i < days.length; i++) {
-    await rebuildDay(days[i]);
-    onProgress?.(i + 1, days.length);
+  // 1 settings read
+  const settings = await settingsService.get();
+
+  // Batch write all daily docs (Firestore max 500 per batch)
+  const BATCH_LIMIT = 500;
+  for (let batchStart = 0; batchStart < days.length; batchStart += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    const chunk = days.slice(batchStart, batchStart + BATCH_LIMIT);
+    for (const dateKey of chunk) {
+      const dayOrders = byDay.get(dateKey) ?? [];
+      const stat = computeDailyStat(dayOrders, dateKey, settings);
+      batch.set(doc(db, DAILY_COLLECTION, dateKey), stat);
+    }
+    await batch.commit();
+    onProgress?.(Math.min(batchStart + chunk.length, days.length), days.length);
   }
+
   return days.length;
 }
 
