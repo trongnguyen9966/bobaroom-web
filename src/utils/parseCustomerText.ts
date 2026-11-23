@@ -69,8 +69,14 @@ export function parseCustomerText(raw: string): { name: string; phone: string; a
       }
       continue;
     }
-    if (ADDR_KWORDS.test(line) && !address) {
-      address = line.replace(TRAILING_NOISE, '').trim();
+    if (ADDR_KWORDS.test(line)) {
+      const cleaned_addr = line.replace(TRAILING_NOISE, '').trim();
+      if (!address) {
+        address = cleaned_addr;
+      } else {
+        // Append admin-level lines (phường/quận/tỉnh) to existing address
+        address = address + ', ' + cleaned_addr;
+      }
       continue;
     }
     if (!name && !/\d/.test(line) && line.length < 40) {
