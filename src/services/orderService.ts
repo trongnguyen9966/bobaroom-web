@@ -27,6 +27,19 @@ import { db } from './firebase';
 
 const ORDERS = 'orders';
 
+// Lazy-loaded to avoid circular dependency
+let _rebuildDay: ((ts: number) => Promise<void>) | null = null;
+function triggerRevenueRebuild(createdAt: number) {
+  if (!_rebuildDay) {
+    import('./revenueAggService').then((m) => {
+      _rebuildDay = m.revenueAggService.rebuildDayFromTimestamp;
+      _rebuildDay(createdAt).catch(() => {});
+    });
+  } else {
+    _rebuildDay(createdAt).catch(() => {});
+  }
+}
+
 interface StoredItem {
   id: string;
   productId: string;
@@ -275,6 +288,9 @@ export const orderService = {
     if (extra?.lockedTotal !== undefined) updates.lockedTotal = extra.lockedTotal;
     if (extra?.lockedShippingCost !== undefined) updates.lockedShippingCost = extra.lockedShippingCost;
     await updateDoc(doc(db, ORDERS, id), updates);
+    // Rebuild daily revenue aggregation for this order's date
+    const snap = await getDoc(doc(db, ORDERS, id));
+    if (snap.exists()) triggerRevenueRebuild(snap.data().createdAt);
   },
 
   async update(id: string, data: CreateOrderDTO): Promise<void> {
@@ -342,6 +358,9 @@ export const orderService = {
     }
 
     await updateDoc(doc(db, ORDERS, id), updates);
+    // Rebuild revenue aggregation for order's date
+    const updatedSnap = await getDoc(doc(db, ORDERS, id));
+    if (updatedSnap.exists()) triggerRevenueRebuild(updatedSnap.data().createdAt);
   },
 
   async delete(id: string): Promise<void> {

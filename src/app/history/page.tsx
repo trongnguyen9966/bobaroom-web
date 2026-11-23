@@ -8,6 +8,7 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { CalendarPicker } from "@/components/dashboard/CalendarPicker";
 import { orderService } from "@/services/orderService";
 import { revenueService, getDateRange } from "@/services/revenueService";
+import { revenueAggService } from "@/services/revenueAggService";
 import {
   ChartDataPoint,
   DateFilter,
@@ -76,6 +77,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [deductionsExpanded, setDeductionsExpanded] = useState(false);
   const [netExpanded, setNetExpanded] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildProgress, setRebuildProgress] = useState("");
   const statsVersionRef = useRef(0);
 
   useEffect(() => {
@@ -97,8 +100,8 @@ export default function DashboardPage() {
           : orders;
         setSections(groupByDate(filtered));
 
-        // computeStats is async — only apply if this is still the current version
-        revenueService.computeStats(orders).then((computedStats) => {
+        // Use pre-computed aggregation docs for revenue stats
+        revenueAggService.getStats(startMs, endMs).then((computedStats) => {
           if (version !== statsVersionRef.current) return;
           setStats(computedStats);
           setLoading(false);
@@ -114,6 +117,27 @@ export default function DashboardPage() {
     setStats(emptyStats);
     setChartData([]);
     setFilter(newFilter);
+  };
+
+  const handleRebuild = async () => {
+    if (rebuilding) return;
+    if (!confirm("Tính lại doanh thu cho khoảng thời gian đang chọn? Quá trình có thể mất vài giây.")) return;
+    setRebuilding(true);
+    setRebuildProgress("Đang tính...");
+    try {
+      const [startMs, endMs] = getDateRange(filter);
+      const days = await revenueAggService.rebuildRange(startMs, endMs, (done, total) => {
+        setRebuildProgress(`${done}/${total} ngày`);
+      });
+      const newStats = await revenueAggService.getStats(startMs, endMs);
+      setStats(newStats);
+      setRebuildProgress(`Hoàn tất ${days} ngày`);
+      setTimeout(() => setRebuildProgress(""), 3000);
+    } catch {
+      setRebuildProgress("Lỗi!");
+    } finally {
+      setRebuilding(false);
+    }
   };
 
   const handleDeleteDraft = async (orderId: string) => {
@@ -146,12 +170,22 @@ export default function DashboardPage() {
       <div className="bg-white border-b border-border px-4 sm:px-6 py-4 sticky top-0 z-40">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">Doanh thu</h1>
-          <button
-            onClick={() => setCalendarOpen(!calendarOpen)}
-            className="px-4 py-2.5 rounded-xl text-sm font-semibold text-primary bg-blue-50 hover:bg-blue-100 active:bg-blue-200"
-          >
-            {getFilterTitle(filter)}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRebuild}
+              disabled={rebuilding}
+              className="px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 disabled:opacity-50"
+              title="Tính lại doanh thu"
+            >
+              {rebuilding ? rebuildProgress : "Tính lại"}
+            </button>
+            <button
+              onClick={() => setCalendarOpen(!calendarOpen)}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-primary bg-blue-50 hover:bg-blue-100 active:bg-blue-200"
+            >
+              {getFilterTitle(filter)}
+            </button>
+          </div>
         </div>
       </div>
 
