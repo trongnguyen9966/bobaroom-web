@@ -88,6 +88,18 @@ export default function DashboardPage() {
     const statuses = statusFilter === "all" ? undefined : [statusFilter];
     const version = ++statsVersionRef.current;
 
+    // Read pre-computed daily docs (1 query only)
+    revenueAggService.getStats(startMs, endMs).then((computedStats) => {
+      if (version !== statsVersionRef.current) return;
+      setStats(computedStats);
+      setLoading(false);
+      setRebuilding(false);
+      setRebuildProgress("");
+    }).catch(() => {
+      setRebuilding(false);
+      setRebuildProgress("");
+    });
+
     const unsubscribe = orderService.subscribeToFiltered(
       { startMs, endMs },
       (orders) => {
@@ -99,13 +111,6 @@ export default function DashboardPage() {
           ? orders.filter((o) => statuses.includes(o.status))
           : orders;
         setSections(groupByDate(filtered));
-
-        // Use pre-computed aggregation docs for revenue stats
-        revenueAggService.getStats(startMs, endMs).then((computedStats) => {
-          if (version !== statsVersionRef.current) return;
-          setStats(computedStats);
-          setLoading(false);
-        });
       },
     );
 
