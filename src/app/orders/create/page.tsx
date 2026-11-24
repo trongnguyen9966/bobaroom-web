@@ -438,6 +438,12 @@ function CreateOrderForm() {
   const platformFeeAmount = platformFeeType === "percent"
     ? total * (platformFeeNum / 100)
     : platformFeeNum;
+
+  // Size status (computed once, used in UI + save)
+  const allDraftItems = [...items, ...giftItems];
+  const hasSizedProducts = allDraftItems.some((i) => (i.product.sizes ?? []).length > 0);
+  const hasUnselectedSize = allDraftItems.some((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
+  const sizeAllGood = hasSizedProducts && sizeConfirmed && !hasUnselectedSize;
   const netRevenue = total - platformFeeAmount;
 
   // Price rounding for display
@@ -450,9 +456,7 @@ function CreateOrderForm() {
       alert("Vui lòng nhập tên khách hàng");
       return;
     }
-    const missingSizeItems = [...items, ...giftItems].filter((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
-    const hasSizedProducts = [...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0);
-    const effectiveMissingSize = hasSizedProducts && (missingSizeItems.length > 0 || !sizeConfirmed);
+    const effectiveMissingSize = hasSizedProducts && (hasUnselectedSize || !sizeConfirmed);
 
     setSaving(true);
     try {
@@ -1054,20 +1058,12 @@ function CreateOrderForm() {
       )}
 
       {/* Size confirmation - only show when items have sizes */}
-      {[...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0) && (
+      {hasSizedProducts && (
         <div className={`rounded-xl shadow-sm border p-4 flex items-center justify-between ${
-          sizeConfirmed && ![...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize)
-            ? 'bg-green-50 border-green-200'
-            : 'bg-orange-50 border-orange-200'
+          sizeAllGood ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
         }`}>
-          <span className={`text-xs font-semibold ${
-            sizeConfirmed && ![...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize)
-              ? 'text-green-700'
-              : 'text-orange-700'
-          }`}>
-            {sizeConfirmed && ![...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize)
-              ? '✓ Size đã chính xác'
-              : '⚠ Chưa xác nhận size'}
+          <span className={`text-xs font-semibold ${sizeAllGood ? 'text-green-700' : 'text-orange-700'}`}>
+            {sizeAllGood ? '✓ Size đã chính xác' : '⚠ Chưa xác nhận size'}
           </span>
           <select
             value={sizeConfirmed ? "confirmed" : "unconfirmed"}
