@@ -51,4 +51,9 @@ describe('lookupAddress', () => {
     const result = lookupAddress('Tháp Mười, Đồng Tháp');
     expect(result.province).toContain('Đồng Tháp');
   });
+
+  it('parses TPHCM without comma separation', () => {
+    const result = lookupAddress('520/2 Ngô Gia Tự Phường An Đông TPHCM');
+    expect(result.province).toContain('Hồ Chí Minh');
+  });
 });

@@ -129,6 +129,13 @@ function matchProvince(tokens: string[]): { province: Province; tokenIndex: numb
         return { province: p, tokenIndex: i };
       }
     }
+    // Check abbreviations (e.g. "TPHCM") embedded in longer tokens
+    for (const [abbr, ] of Object.entries(PROVINCE_ABBREVS)) {
+      if (abbr.length >= 2 && wordBoundaryMatch(norm, abbr)) {
+        const found = pMap.get(abbr);
+        if (found) return { province: found, tokenIndex: i };
+      }
+    }
   }
 
   return null;
