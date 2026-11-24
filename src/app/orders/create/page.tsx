@@ -838,6 +838,29 @@ function CreateOrderForm() {
         </div>
       </div>
 
+      {/* Size confirmation - above product list */}
+      {hasSizedProducts && (
+        <div className={`rounded-xl shadow-sm border p-4 flex items-center justify-between ${
+          sizeAllGood ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
+        }`}>
+          <span className={`text-xs font-semibold ${sizeAllGood ? 'text-green-700' : 'text-orange-700'}`}>
+            {sizeAllGood ? '✓ Size đã chính xác' : '⚠ Chưa xác nhận size'}
+          </span>
+          <select
+            value={sizeConfirmed ? "confirmed" : "unconfirmed"}
+            onChange={(e) => setSizeConfirmed(e.target.value === "confirmed")}
+            className={`text-xs font-semibold rounded-lg px-3 py-1.5 border appearance-none ${
+              sizeConfirmed
+                ? 'bg-green-100 text-green-700 border-green-300'
+                : 'bg-orange-100 text-orange-700 border-orange-300'
+            }`}
+          >
+            <option value="unconfirmed">Chưa đúng size</option>
+            <option value="confirmed">Đã đúng size</option>
+          </select>
+        </div>
+      )}
+
       {/* Products */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -1054,29 +1077,6 @@ function CreateOrderForm() {
               })}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Size confirmation - only show when items have sizes */}
-      {hasSizedProducts && (
-        <div className={`rounded-xl shadow-sm border p-4 flex items-center justify-between ${
-          sizeAllGood ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
-        }`}>
-          <span className={`text-xs font-semibold ${sizeAllGood ? 'text-green-700' : 'text-orange-700'}`}>
-            {sizeAllGood ? '✓ Size đã chính xác' : '⚠ Chưa xác nhận size'}
-          </span>
-          <select
-            value={sizeConfirmed ? "confirmed" : "unconfirmed"}
-            onChange={(e) => setSizeConfirmed(e.target.value === "confirmed")}
-            className={`text-xs font-semibold rounded-lg px-3 py-1.5 border appearance-none ${
-              sizeConfirmed
-                ? 'bg-green-100 text-green-700 border-green-300'
-                : 'bg-orange-100 text-orange-700 border-orange-300'
-            }`}
-          >
-            <option value="unconfirmed">Chưa đúng size</option>
-            <option value="confirmed">Đã đúng size</option>
-          </select>
         </div>
       )}
 
