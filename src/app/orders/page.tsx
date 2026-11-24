@@ -542,7 +542,7 @@ function OrderCard({
     <div
       className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-colors ${
         order.hasMissingSize && order.status === 'draft'
-          ? "border-red-300 border-l-4 border-l-red-400 bg-red-50/30"
+          ? "border-orange-300 border-l-4 border-l-orange-400 bg-orange-50/30"
           : `border-gray-100 border-l-4 ${isSelected ? "bg-blue-50 border-l-primary" : `border-status-${order.status}`}`
       } ${order.isWaiting ? "bg-amber-50" : ""}`}
     >
@@ -573,7 +573,7 @@ function OrderCard({
               </span>
             )}
             {order.hasMissingSize && order.status === 'draft' && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200 inline-block mt-1 ml-1">
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-200 inline-block mt-1 ml-1">
                 Thiếu size
               </span>
             )}

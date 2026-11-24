@@ -929,7 +929,7 @@ function CreateOrderForm() {
                         className={`mt-1.5 w-full text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors appearance-none bg-no-repeat bg-[length:12px] bg-[right_8px_center] ${
                           item.selectedSize
                             ? "bg-blue-50 text-primary border-primary"
-                            : "bg-gray-50 text-gray-500 border-amber-400"
+                            : "bg-gray-50 text-gray-500 border-orange-400"
                         }`}
                         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")` }}
                       >
@@ -1034,7 +1034,7 @@ function CreateOrderForm() {
                           className={`mt-1.5 w-full text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors appearance-none bg-no-repeat bg-[length:12px] bg-[right_8px_center] ${
                             item.selectedSize
                               ? "bg-green-50 text-green-700 border-green-400"
-                              : "bg-gray-50 text-gray-500 border-amber-400"
+                              : "bg-gray-50 text-gray-500 border-orange-400"
                           }`}
                           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")` }}
                         >

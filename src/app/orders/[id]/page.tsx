@@ -767,7 +767,7 @@ export default function OrderDetailPage() {
           {order.items.map((item) => {
             const itemMissingSize = !item.selectedSize && missingSizeProductIds.has(item.productId);
             return (
-            <div key={item.id} className={`px-5 py-3 flex items-start gap-3 ${itemMissingSize ? "bg-red-50/50 border-l-2 border-l-red-400" : ""}`}>
+            <div key={item.id} className={`px-5 py-3 flex items-start gap-3 ${itemMissingSize ? "bg-orange-50/50 border-l-2 border-l-orange-400" : ""}`}>
               {item.productImageUri && (
                 <img
                   src={item.productImageUri}
@@ -795,7 +795,7 @@ export default function OrderDetailPage() {
                   </span>
                 )}
                 {itemMissingSize && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200 inline-block mt-0.5">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-200 inline-block mt-0.5">
                     Chưa chọn size
                   </span>
                 )}
@@ -1199,7 +1199,7 @@ export default function OrderDetailPage() {
                           className={`w-full text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors appearance-none bg-no-repeat bg-[length:12px] bg-[right_8px_center] ${
                             entry?.selectedSize
                               ? "bg-green-50 text-green-700 border-green-500"
-                              : "bg-gray-50 text-gray-500 border-amber-400"
+                              : "bg-gray-50 text-gray-500 border-orange-400"
                           }`}
                           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")` }}
                         >
