@@ -22,8 +22,8 @@ body {
 .status-draft { --status-bg: #F3F4F6; --status-text: #6B7280; }
 .status-confirmed { --status-bg: #D1FAE5; --status-text: #065F46; }
 .status-preparing { --status-bg: #DBEAFE; --status-text: #1E40AF; }
-.status-packed { --status-bg: #EDE9FE; --status-text: #5B21B6; }
-.status-shipped { --status-bg: #FEF3C7; --status-text: #92400E; }
+.status-packed { --status-bg: #FEF3C7; --status-text: #92400E; }
+.status-shipped { --status-bg: #EDE9FE; --status-text: #6D28D9; }
 .status-cancelled { --status-bg: #FEE2E2; --status-text: #991B1B; }
 .status-completed { --status-bg: #D1FAE5; --status-text: #059669; }
 .status-deleted { --status-bg: #F3F4F6; --status-text: #9CA3AF; }
@@ -32,8 +32,8 @@ body {
 .border-status-draft { border-left-color: #9CA3AF; }
 .border-status-confirmed { border-left-color: #10B981; }
 .border-status-preparing { border-left-color: #3B82F6; }
-.border-status-packed { border-left-color: #8B5CF6; }
-.border-status-shipped { border-left-color: #F59E0B; }
+.border-status-packed { border-left-color: #F59E0B; }
+.border-status-shipped { border-left-color: #8B5CF6; }
 .border-status-cancelled { border-left-color: #EF4444; }
 .border-status-completed { border-left-color: #059669; }
 .border-status-deleted { border-left-color: #D1D5DB; }

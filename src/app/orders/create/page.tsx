@@ -99,6 +99,9 @@ function CreateOrderForm() {
   const [catalogPasteVisible, setCatalogPasteVisible] = useState(false);
   const [catalogPasteText, setCatalogPasteText] = useState("");
 
+  // Size confirmation
+  const [sizeConfirmed, setSizeConfirmed] = useState(false);
+
   // State
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!editId);
@@ -448,11 +451,8 @@ function CreateOrderForm() {
       return;
     }
     const missingSizeItems = [...items, ...giftItems].filter((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize);
-    if (missingSizeItems.length > 0) {
-      const names = missingSizeItems.map((i) => `"${i.product.name}"`).join(", ");
-      const ok = confirm(`${names} chưa chọn size. Lưu đơn nháp không có size?\n\n(Bạn sẽ không thể xác nhận đơn cho đến khi chọn size)`);
-      if (!ok) return;
-    }
+    const hasSizedProducts = [...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0);
+    const effectiveMissingSize = hasSizedProducts && (missingSizeItems.length > 0 || !sizeConfirmed);
 
     setSaving(true);
     try {
@@ -473,7 +473,7 @@ function CreateOrderForm() {
         platformFeeType,
         platformFeeValue: platformFeeNum,
         deposit: depositNum,
-        hasMissingSize: missingSizeItems.length > 0,
+        hasMissingSize: effectiveMissingSize,
         items: allItems.map((i) => {
           const sizePrice = i.selectedSize
             ? (i.product.sizes?.find((s) => s.name === i.selectedSize)?.price ?? i.product.price)
@@ -1050,6 +1050,37 @@ function CreateOrderForm() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Size confirmation - only show when items have sizes */}
+      {[...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0) && (
+        <div className={`rounded-xl shadow-sm border p-4 flex items-center justify-between ${
+          sizeConfirmed && ![...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize)
+            ? 'bg-green-50 border-green-200'
+            : 'bg-orange-50 border-orange-200'
+        }`}>
+          <span className={`text-xs font-semibold ${
+            sizeConfirmed && ![...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize)
+              ? 'text-green-700'
+              : 'text-orange-700'
+          }`}>
+            {sizeConfirmed && ![...items, ...giftItems].some((i) => (i.product.sizes ?? []).length > 0 && !i.selectedSize)
+              ? '✓ Size đã chính xác'
+              : '⚠ Chưa xác nhận size'}
+          </span>
+          <select
+            value={sizeConfirmed ? "confirmed" : "unconfirmed"}
+            onChange={(e) => setSizeConfirmed(e.target.value === "confirmed")}
+            className={`text-xs font-semibold rounded-lg px-3 py-1.5 border appearance-none ${
+              sizeConfirmed
+                ? 'bg-green-100 text-green-700 border-green-300'
+                : 'bg-orange-100 text-orange-700 border-orange-300'
+            }`}
+          >
+            <option value="unconfirmed">Chưa đúng size</option>
+            <option value="confirmed">Đã đúng size</option>
+          </select>
         </div>
       )}
 

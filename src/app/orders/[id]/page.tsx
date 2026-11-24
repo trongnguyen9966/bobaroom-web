@@ -922,8 +922,8 @@ export default function OrderDetailPage() {
         ) : (
           <>
             {isDraft && hasMissingSize && (
-              <div className="w-full p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs text-center">
-                ⚠ Có sản phẩm chưa chọn size — cần chỉnh sửa đơn trước khi xác nhận
+              <div className="w-full p-3 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-xs text-center">
+                ⚠ Có sản phẩm chưa chọn size
               </div>
             )}
             {isDraft && (
@@ -933,14 +933,10 @@ export default function OrderDetailPage() {
                     alert("Vui lòng thêm sản phẩm trước khi xác nhận");
                     return;
                   }
-                  if (hasMissingSize) {
-                    alert("Có sản phẩm chưa chọn size. Vui lòng chỉnh sửa đơn để chọn size trước khi xác nhận.");
-                    return;
-                  }
                   setPaymentConfirmOpen(true);
                 }}
-                disabled={actionLoading || hasMissingSize}
-                className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm ${hasMissingSize ? 'bg-gray-300 cursor-not-allowed' : 'bg-primary hover:bg-primary-hover disabled:opacity-50'}`}
+                disabled={actionLoading}
+                className="w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm bg-primary hover:bg-primary-hover disabled:opacity-50"
               >
                 Xác nhận đơn hàng
               </button>
