@@ -838,33 +838,11 @@ function CreateOrderForm() {
         </div>
       </div>
 
-      {/* Size confirmation - above product list */}
-      {hasSizedProducts && (
-        <div className={`rounded-xl shadow-sm border p-4 flex items-center justify-between ${
-          sizeAllGood ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
-        }`}>
-          <span className={`text-xs font-semibold ${sizeAllGood ? 'text-green-700' : 'text-orange-700'}`}>
-            {sizeAllGood ? '✓ Size đã chính xác' : '⚠ Chưa xác nhận size'}
-          </span>
-          <select
-            value={sizeConfirmed ? "confirmed" : "unconfirmed"}
-            onChange={(e) => setSizeConfirmed(e.target.value === "confirmed")}
-            className={`text-xs font-semibold rounded-lg px-3 py-1.5 border appearance-none ${
-              sizeConfirmed
-                ? 'bg-green-100 text-green-700 border-green-300'
-                : 'bg-orange-100 text-orange-700 border-orange-300'
-            }`}
-          >
-            <option value="unconfirmed">Chưa đúng size</option>
-            <option value="confirmed">Đã đúng size</option>
-          </select>
-        </div>
-      )}
-
       {/* Products */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">Sản phẩm ({items.length})</h3>
+        <div className="px-5 py-3 border-b border-gray-100 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-gray-900">Sản phẩm ({items.length})</h3>
           {!isExchangeOrder && (
             <div className="flex gap-3">
               <button
@@ -878,6 +856,34 @@ function CreateOrderForm() {
                 className="text-xs font-semibold text-primary hover:underline"
               >
                 + Thêm sản phẩm
+              </button>
+            </div>
+          )}
+          </div>
+          {/* Size confirmation toggle */}
+          {hasSizedProducts && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSizeConfirmed(false)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  !sizeConfirmed
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                Chưa đúng size
+              </button>
+              <button
+                type="button"
+                onClick={() => setSizeConfirmed(true)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  sizeConfirmed
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                Đã đúng size
               </button>
             </div>
           )}
