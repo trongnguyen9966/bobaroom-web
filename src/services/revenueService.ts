@@ -96,7 +96,7 @@ async function computeStats(orders: OrderSummary[]): Promise<RevenueStats> {
     const fullOrder = await orderService.getById(order.id);
     if (fullOrder) {
       for (const item of fullOrder.items) {
-        if (!item.isGift && !item.isExchangeReturn) {
+        if (!item.isExchangeReturn) {
           const cp = item.costPrice > 0 ? item.costPrice : (productCostMap.get(item.productId) ?? 0);
           totalCostOfGoods += cp * item.quantity;
         }

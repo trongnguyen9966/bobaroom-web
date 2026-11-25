@@ -138,7 +138,7 @@ export function calcTotals(order: Order, items: OrderItem[]) {
     .map((i) => i.productName)
     .join(', ');
   const costOfGoods = items
-    .filter((i) => !i.isGift)
+    .filter((i) => !i.isExchangeReturn)
     .reduce((s, i) => s + (i.costPrice ?? 0) * i.quantity, 0);
   return { subtotal, discountAmount, total, platformFeeAmount, itemCount, itemNames, costOfGoods };
 }
