@@ -23,6 +23,7 @@ import {
 import { db } from './firebase';
 import { OrderStatus, OrderSummary, RevenueStats } from '@/types';
 import { settingsService } from './settingsService';
+import { productService } from './productService';
 import { calcTotals } from './orderService';
 
 const DAILY_COLLECTION = 'revenue_daily';
@@ -149,7 +150,7 @@ interface StoredItem {
   selectedSize?: string;
 }
 
-function mapDocToSummary(snap: { id: string; data(): Record<string, any> }): OrderSummary {
+function mapDocToSummary(snap: { id: string; data(): Record<string, any> }, productCostMap?: Map<string, number>): OrderSummary {
   const d = snap.data();
   const order = {
     id: snap.id,
@@ -201,14 +202,14 @@ function mapDocToSummary(snap: { id: string; data(): Record<string, any> }): Ord
     productSize: raw.productSize ?? '',
     productImageUri: raw.productImageUri ?? null,
     currentStock: 0,
-    costPrice: Number(raw.costPrice) || 0,
+    costPrice: Number(raw.costPrice) || (productCostMap?.get(raw.productId) ?? 0),
     isExchangeReturn: raw.isExchangeReturn ?? false,
     selectedSize: raw.selectedSize,
   }));
   return { ...order, ...calcTotals(order, items) };
 }
 
-async function queryOrdersForDay(dateKey: string): Promise<OrderSummary[]> {
+async function queryOrdersForDay(dateKey: string, productCostMap?: Map<string, number>): Promise<OrderSummary[]> {
   const [year, month, day] = dateKey.split('-').map(Number);
   const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
   const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
@@ -222,7 +223,7 @@ async function queryOrdersForDay(dateKey: string): Promise<OrderSummary[]> {
     ),
   );
   return snap.docs
-    .map((d) => mapDocToSummary(d as unknown as { id: string; data(): Record<string, any> }))
+    .map((d) => mapDocToSummary(d as unknown as { id: string; data(): Record<string, any> }, productCostMap))
     .filter((o) => o.status !== 'deleted');
 }
 
@@ -233,7 +234,9 @@ async function queryOrdersForDay(dateKey: string): Promise<OrderSummary[]> {
  * Called whenever an order on that date changes status.
  */
 async function rebuildDay(dateKey: string): Promise<void> {
-  const orders = await queryOrdersForDay(dateKey);
+  const allProducts = await productService.getAll();
+  const productCostMap = new Map(allProducts.map((p) => [p.id, p.costPrice]));
+  const orders = await queryOrdersForDay(dateKey, productCostMap);
   const settings = await settingsService.get();
   const stat = computeDailyStat(orders, dateKey, settings);
   await setDoc(doc(db, DAILY_COLLECTION, dateKey), stat);
@@ -257,6 +260,10 @@ async function rebuildRange(startMs: number, endMs: number, onProgress?: (done: 
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
 
+  // Load product cost map for costPrice fallback (old orders may have costPrice=0)
+  const allProducts = await productService.getAll();
+  const productCostMap = new Map(allProducts.map((p) => [p.id, p.costPrice]));
+
   // 1 query: all orders in range
   const snap = await getDocs(
     query(
@@ -267,7 +274,7 @@ async function rebuildRange(startMs: number, endMs: number, onProgress?: (done: 
     ),
   );
   const allOrders = snap.docs
-    .map((d) => mapDocToSummary(d as unknown as { id: string; data(): Record<string, any> }))
+    .map((d) => mapDocToSummary(d as unknown as { id: string; data(): Record<string, any> }, productCostMap))
     .filter((o) => o.status !== 'deleted');
 
   // Group orders by date key
