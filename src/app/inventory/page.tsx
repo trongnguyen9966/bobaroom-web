@@ -23,6 +23,7 @@ export default function InventoryPage() {
   const [soldCounts, setSoldCounts] = useState<Map<string, number>>(new Map());
   const [stockFilterValue, setStockFilterValue] = useState("");
   const [soldSort, setSoldSort] = useState<"none" | "asc" | "desc">("none");
+  const [showCapital, setShowCapital] = useState(false);
 
   useEffect(() => {
     const unsub = productService.subscribeToAll((list) => {
@@ -63,6 +64,7 @@ export default function InventoryPage() {
   });
 
   const totalStock = filtered.reduce((s, p) => s + p.stock, 0);
+  const totalCapital = filtered.reduce((s, p) => s + (p.costPrice ?? 0) * p.stock, 0);
   const totalSold = Array.from(soldCounts.values()).reduce((s, v) => s + v, 0);
   const outOfStockCount = products.filter((p) => p.stock === 0).length;
   const categoryName = categoryFilter
@@ -76,6 +78,14 @@ export default function InventoryPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">Kho hàng</h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCapital(!showCapital)}
+              className={`text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors ${
+                showCapital ? "bg-emerald-50 text-emerald-700" : "text-primary hover:bg-blue-50 active:bg-blue-100"
+              }`}
+            >
+              {showCapital ? formatVND(totalCapital) : "Tổng vốn"}
+            </button>
             <button
               onClick={() => setCategoryPickerOpen(true)}
               className="text-sm font-semibold text-primary px-4 py-2.5 rounded-lg hover:bg-blue-50 active:bg-blue-100"

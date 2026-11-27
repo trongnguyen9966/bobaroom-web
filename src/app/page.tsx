@@ -22,7 +22,7 @@ function getProductImages(product: Product): string[] {
 
 const PROMO_ICONS = ["🎁", "✨", "💎", "🎀", "🌸", "💖", "🎉", "🛍️"];
 const EXCLUDED_CATEGORIES = ["chặn charm", "tặng"];
-const ZALO_PHONE = "0836879035";
+const ZALO_PHONE = "0392913836";
 const FB_PAGE_URL = "https://m.me/bobaroomdiary";
 
 interface SampleItem {

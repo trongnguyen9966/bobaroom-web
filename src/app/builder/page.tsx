@@ -20,7 +20,7 @@ interface HistoryEntry {
   bracelet: Product | null;
 }
 
-const ZALO_PHONE = "0836879035";
+const ZALO_PHONE = "0392913836";
 const FB_PAGE_URL = "https://m.me/bobaroomdiary";
 const MAX_HISTORY = 50;
 
