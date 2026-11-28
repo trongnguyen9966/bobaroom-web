@@ -887,10 +887,8 @@ export default function BuilderPage() {
   const buildMessage = () => {
     const lines: string[] = [];
     if (selectedBracelet) {
-      lines.push(`Vòng: ${selectedBracelet.sku ? selectedBracelet.sku + " - " : ""}${selectedBracelet.name} — ${formatVND(selectedBracelet.price)}`);
+      lines.push(`- ${selectedBracelet.sku} - ${selectedBracelet.name} x1`);
     }
-    lines.push("");
-    lines.push(`Charm (${charms.length}):`);
     // Group charms by product
     const grouped = new Map<string, { product: Product; count: number }>();
     charms.forEach((c) => {
@@ -903,13 +901,8 @@ export default function BuilderPage() {
       }
     });
     grouped.forEach(({ product, count }) => {
-      const sku = product.sku ? `${product.sku} - ` : "";
-      lines.push(`- ${sku}${product.name} x${count} — ${formatVND(product.price * count)}`);
+      lines.push(`- ${product.sku} - ${product.name} x${count}`);
     });
-    lines.push("");
-    lines.push(`Tổng: ${formatVND(totalPrice)}`);
-    lines.push("");
-    lines.push("Phối từ boba.room builder");
     return lines.join("\n");
   };
 
